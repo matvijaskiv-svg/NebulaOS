@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.6.1
+- First release of the NebulaOS update channel
+
 ## 0.6.0
 - Nebula Chat 2: groups with owner/moderators/mute/kick/pin, photos and files, avatars and status,
   "typing…", delivered/seen ticks, a feed of posts with likes, polls, official community groups.
