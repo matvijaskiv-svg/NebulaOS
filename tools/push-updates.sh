@@ -26,6 +26,8 @@ if [[ $what == channel || $what == all ]]; then
   echo "==> Channel → github.com/$UPDATES"
   [[ -d $dir/.git ]] || gh repo clone "$UPDATES" "$dir"
   git -C "$dir" pull -q --ff-only || true
+  git -C "$dir" config user.name >/dev/null || git -C "$dir" config user.name NebulaOS
+  git -C "$dir" config user.email >/dev/null || git -C "$dir" config user.email nebulaos@users.noreply.github.com
   python3 "$src/tools/admin/sign-channel.py" --check
   rm -rf "$dir/channel"
   cp -a "$src/channel" "$dir/channel"
