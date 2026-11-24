@@ -1,6 +1,6 @@
 {
   "support_id": "",
-  "latest": "0.7.1",
+  "latest": "0.7.2",
   "news": [
     {
       "id": "2026-11-24-welcome",
@@ -28,6 +28,13 @@
       "action": "update",
       "title": "NebulaOS 0.7.1",
       "text": "Each mode now has its own panels: Hacking like macOS, Gaming like Garuda, Server like Ubuntu"
+    },
+    {
+      "id": "release-0.7.2",
+      "level": "info",
+      "action": "update",
+      "title": "NebulaOS 0.7.2",
+      "text": "Panels change shape and style with the mode: glass macOS dock, solid Garuda taskbar, Ubuntu side dock"
     }
   ]
 }

@@ -34,6 +34,8 @@ function addClock(panel, date) {
     c.writeConfig("dateFormat", "shortDate");
     return c;
 }
+// opacity: "adaptive" (glass), "opaque" or "translucent"
+function look(p, opacity) { safe(function () { p.opacity = opacity; }); }
 function topBar(height) {
     var p = new Panel;
     p.location = "top";

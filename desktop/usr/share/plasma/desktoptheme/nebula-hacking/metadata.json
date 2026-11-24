@@ -1,0 +1,15 @@
+{
+  "KPlugin": {
+    "Id": "nebula-hacking",
+    "Name": "Nebula Hacking",
+    "Description": "Glassy translucent panels for hacking mode",
+    "Authors": [
+      {
+        "Name": "NebulaOS"
+      }
+    ],
+    "License": "GPL-2.0-or-later",
+    "Version": "1.0"
+  },
+  "X-Plasma-API": "5.0"
+}

@@ -102,6 +102,8 @@ apply_dock() {
 apply() {
   local m=${1:-$(current_mode)} scheme layout prof
   scheme=$(mode_var "$m" SCHEME)
+  # Panel look of the mode (colors, glass or solid) — a Plasma theme per mode.
+  command -v plasma-apply-desktoptheme >/dev/null && plasma-apply-desktoptheme "nebula-$m" >/dev/null 2>&1 || true
   if command -v plasma-apply-colorscheme >/dev/null; then
     plasma-apply-colorscheme "$scheme" >/dev/null 2>&1 || kcfg --file kdeglobals --group General --key ColorScheme "$scheme"
   fi

@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.7.2
+- Panels change shape and style with the mode: glass macOS dock, solid Garuda taskbar, Ubuntu side dock
+
 ## 0.7.1
 - Each mode now has its own panels: Hacking like macOS, Gaming like Garuda, Server like Ubuntu
 

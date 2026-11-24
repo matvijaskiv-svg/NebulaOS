@@ -1,6 +1,7 @@
 // Gaming — Garuda-like: one floating full-width taskbar at the bottom, everything in it,
 // big icons, live CPU/GPU load next to the tray. No top bar: more room for games.
 var bar = dockPanel("bottom", 2.6, true, true);
+look(bar, "opaque");                       // solid floating bar with rounded ends
 addMenu(bar, "nebulaos");
 bar.addWidget("org.kde.plasma.marginsseparator");
 addTasks(bar, launchers(["applications:steam.desktop", "applications:net.lutris.Lutris.desktop",

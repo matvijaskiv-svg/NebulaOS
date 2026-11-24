@@ -2,7 +2,7 @@
 # Package with all NebulaOS files. Built by build.sh / tools/publish-repo.sh,
 # which put the project's desktop/ folder next to this PKGBUILD.
 pkgname=nebulaos-desktop
-pkgver=0.7.1
+pkgver=0.7.2
 pkgrel=1
 pkgdesc='NebulaOS desktop (KDE Plasma): gaming/hacking/server modes, locked styling, settings, updates'
 arch=('any')

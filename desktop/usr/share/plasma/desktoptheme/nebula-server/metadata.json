@@ -1,0 +1,15 @@
+{
+  "KPlugin": {
+    "Id": "nebula-server",
+    "Name": "Nebula Server",
+    "Description": "Calm opaque panels for server mode",
+    "Authors": [
+      {
+        "Name": "NebulaOS"
+      }
+    ],
+    "License": "GPL-2.0-or-later",
+    "Version": "1.0"
+  },
+  "X-Plasma-API": "5.0"
+}
