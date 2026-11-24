@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.7.1
+- Each mode now has its own panels: Hacking like macOS, Gaming like Garuda, Server like Ubuntu
+
 ## 0.7.0
 - Fix: the update address is now part of the package, so updating no longer removes it.
 - Updates and the signed channel come from the public repository NebulaOS-updates;

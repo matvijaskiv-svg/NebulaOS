@@ -82,13 +82,20 @@ apply_wallpaper() {
 }
 
 apply_dock() {
-  local pos; pos=$(dock_for "$1")
+  local pos key; pos=$(dock_for "$1")
   in_plasma || return 0
-  # Each mode has its own panel style: Hacking — Mac-like floating dock, Gaming — full-width
-  # bottom panel like Garuda, Server — vertical dock on the left like Ubuntu.
-  local length=fit floating=true
-  case $1 in gaming) length=fill floating=false ;; server) length=fill floating=false ;; esac
-  plasma_js "panels().forEach(function (p) { if (p.location !== 'top') { p.locked = false; p.location = '$pos'; p.lengthMode = '$length'; p.floating = $floating; p.locked = true; } });"
+  # Each mode has its own panels, rebuilt from /usr/share/nebulaos/panels:
+  # Hacking — macOS top bar + floating dock, Gaming — one Garuda-style taskbar,
+  # Server — Ubuntu top bar with a centered clock + a dock on the left.
+  # Rebuilt only when the mode or the dock position changes (keeps it fast at login).
+  key="$1:$pos:$(cat "$SHARE/VERSION" 2>/dev/null)"
+  [[ ${2:-} != --force && -r $CONF/panels && $(< "$CONF/panels") == "$key" ]] && return 0
+  local js
+  js=$(cat "$SHARE/panels/common.js" "$SHARE/panels/$1.js" 2>/dev/null) || return 0
+  plasma_js "${js//__DOCK__/$pos}" || return 0
+  install -d "$CONF"
+  printf '%s
+' "$key" > "$CONF/panels"
 }
 
 # Colors, accent, terminal, keyboard layout — everything the mode defines.
