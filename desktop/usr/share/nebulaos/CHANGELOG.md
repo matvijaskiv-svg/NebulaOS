@@ -1,6 +1,7 @@
 # NebulaOS changelog
 
-## 0.7.0 (in progress)
+## 0.7.0
+- Fix: the update address is now part of the package, so updating no longer removes it.
 - Updates and the signed channel come from the public repository NebulaOS-updates;
   the source repository can be private (tools/push-updates.sh).
 
