@@ -1,0 +1,10 @@
+# NebulaOS: Jellyfin media server (web, port 8096). Put media into ./media.
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    restart: unless-stopped
+    ports: ["8096:8096"]
+    volumes:
+      - ./config:/config
+      - ./cache:/cache
+      - ./media:/media

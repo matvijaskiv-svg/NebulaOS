@@ -1,0 +1,28 @@
+// NebulaOS: system summary shown when a terminal opens (fastfetch).
+{
+  "logo": {
+    "source": "/usr/share/nebulaos/fastfetch/logo.txt",
+    "color": { "1": "magenta", "2": "white", "3": "cyan" },
+    "padding": { "top": 1, "left": 1, "right": 3 }
+  },
+  "display": {
+    "separator": "  ",
+    "color": { "keys": "magenta" },
+    "key": { "width": 10 }
+  },
+  "modules": [
+    { "type": "title", "format": "{user-name}@{host-name}" },
+    "separator",
+    { "type": "os", "key": "󰣇 OS" },
+    { "type": "kernel", "key": " Kernel" },
+    { "type": "command", "key": "󰊴 Mode", "text": "nebula mode --current --pretty 2>/dev/null" },
+    { "type": "de", "key": " Desktop" },
+    { "type": "cpu", "key": "󰻠 CPU" },
+    { "type": "gpu", "key": "󰍛 GPU" },
+    { "type": "memory", "key": " Memory" },
+    { "type": "disk", "key": "󰋊 Disk", "folders": "/" },
+    { "type": "uptime", "key": "󰅐 Uptime" },
+    "break",
+    "colors"
+  ]
+}

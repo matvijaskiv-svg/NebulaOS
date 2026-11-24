@@ -1,0 +1,11 @@
+# NebulaOS: Minecraft Java server (port 25565). nebula template deploy asks you to accept the EULA.
+services:
+  minecraft:
+    image: itzg/minecraft-server:latest
+    restart: unless-stopped
+    ports: ["25565:25565"]
+    environment:
+      EULA: "FALSE"   # nebula template deploy asks for consent
+      MEMORY: "2G"
+    volumes:
+      - ./data:/data

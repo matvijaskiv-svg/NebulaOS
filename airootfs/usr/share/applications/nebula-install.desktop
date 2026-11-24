@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Install NebulaOS
+Comment=Install NebulaOS to a disk
+Name[ru]=Установить NebulaOS
+Comment[ru]=Установка NebulaOS на диск
+Name[uk]=Встановити NebulaOS
+Comment[uk]=Встановлення NebulaOS на диск
+Name[it]=Installa NebulaOS
+Comment[it]=Installa NebulaOS su disco
+Exec=nebula-install-gui
+Icon=nebulaos
+Terminal=false
+Type=Application
+Categories=System;

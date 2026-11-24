@@ -1,0 +1,714 @@
+#!/usr/bin/env bash
+# NebulaOS: modes and user settings on KDE Plasma.
+#
+#   nebula mode [gaming|hacking|server] [--install]   switch mode (and install its apps)
+#   nebula mode --menu | --current [--pretty]
+#   nebula settings wallpaper <file|default>          the only look settings
+#   nebula settings dock <bottom|left|right|default>  a user can change
+#   nebula update [--check]            update NebulaOS and Arch (snapshot before/after)
+#   nebula drivers                     pick graphics drivers
+#   nebula snapshot [list|create]      system snapshots (Btrfs + Snapper)
+#   nebula game mangohud on|off        FPS overlay for all Vulkan/OpenGL games
+#   nebula tor on|off|status           Tor (SOCKS5 127.0.0.1:9050, torsocks)
+#   nebula privacy mac on|off          random Wi-Fi/Ethernet MAC address
+#   nebula server status|enable <ssh|docker|cockpit|web|db>|firewall
+#   nebula power [power-saver|balanced|performance]   power profile
+#   nebula lab list|start|stop <lab>   practice vulnerable labs (127.0.0.1 only)
+#   nebula template list|deploy|remove <files|media|minecraft>   ready-made servers
+#   nebula backup set <dir>|run|auto on|off           backups
+#   nebula automode on|off             switch mode by running apps
+#   nebula nightlight | perf | private-browser
+#   nebula lang [en|ru|uk|it]           interface language and keyboard layout
+#   nebula clean                       free disk space (cache, orphans, old logs)
+#   nebula doctor                      check the system and suggest fixes
+#   nebula battery status|on|off       keep the battery at 80% (longer life)
+#   nebula keys                        keyboard shortcuts
+#   nebula news [--notify]             NebulaOS news and announcements
+#   nebula chat | admin                Nebula Chat, admin panel
+#   nebula hub | store | version
+#   nebula apply | term | lock         (internal: apply the mode at login, etc.)
+#
+# The look (colors, panels, window style) is locked with KDE Kiosk in
+# /etc/xdg/kdeglobals; this tool applies the current mode on top of it.
+set -euo pipefail
+
+SHARE=/usr/share/nebulaos
+MODES=(gaming hacking server)
+RUN=${XDG_RUNTIME_DIR:-/tmp/nebulaos-$UID}/nebulaos
+CONF=${XDG_CONFIG_HOME:-$HOME/.config}/nebulaos
+# shellcheck source=/dev/null
+source /usr/lib/nebulaos/i18n.sh
+
+die() { printf 'nebula: %s\n' "$*" >&2; exit 1; }
+is_mode() { [[ " ${MODES[*]} " == *" ${1:-} "* ]]; }
+
+# KEY from the mode's mode.env (the file is read, never executed).
+mode_var() { sed -n "s/^$2=//p" "$SHARE/modes/$1/mode.env" | tail -n1; }
+
+current_mode() {
+  local m=''
+  [[ -r $CONF/mode ]] && read -r m < "$CONF/mode" || true
+  is_mode "$m" || { [[ -r /etc/nebulaos/default-mode ]] && read -r m < /etc/nebulaos/default-mode || true; }
+  is_mode "$m" || m=gaming
+  printf '%s\n' "$m"
+}
+
+# User settings: wallpaper and dock position only, all validated.
+pref() { [[ -r $CONF/user.conf ]] && sed -n "s/^$1=//p" "$CONF/user.conf" | tail -n1 || true; }
+wallpaper_for() {
+  local w; w=$(pref wallpaper)
+  if [[ -n $w && -f $w && ${w,,} =~ \.(png|jpe?g|webp)$ ]]; then printf '%s\n' "$w"
+  else printf '%s\n' "$SHARE/modes/$1/wallpaper.png"; fi
+}
+dock_for() {
+  local p; p=$(pref dock)
+  case $p in bottom|left|right) printf '%s\n' "$p" ;; *) mode_var "$1" DOCK ;; esac
+}
+
+# ---------- Applying a mode on Plasma ----------
+spawn() { setsid -f "$@" >/dev/null 2>&1 < /dev/null; }
+kcfg() { command -v kwriteconfig6 >/dev/null && kwriteconfig6 "$@" || true; }
+qdbus_() { local q; q=$(command -v qdbus6 || command -v qdbus || true); [[ -n $q ]] && "$q" "$@" 2>/dev/null || true; }
+in_plasma() { [[ ${XDG_CURRENT_DESKTOP:-} == *KDE* ]] && pgrep -x plasmashell >/dev/null; }
+plasma_js() { qdbus_ org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$1" >/dev/null; }
+
+apply_wallpaper() {
+  local w; w=$(wallpaper_for "$1")
+  if command -v plasma-apply-wallpaperimage >/dev/null && in_plasma; then
+    plasma-apply-wallpaperimage "$w" >/dev/null 2>&1 || true
+  fi
+  # Lock screen uses the same picture.
+  kcfg --file kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General --key Image "file://$w"
+}
+
+apply_dock() {
+  local pos; pos=$(dock_for "$1")
+  in_plasma || return 0
+  # Each mode has its own panel style: Hacking — Mac-like floating dock, Gaming — full-width
+  # bottom panel like Garuda, Server — vertical dock on the left like Ubuntu.
+  local length=fit floating=true
+  case $1 in gaming) length=fill floating=false ;; server) length=fill floating=false ;; esac
+  plasma_js "panels().forEach(function (p) { if (p.location !== 'top') { p.locked = false; p.location = '$pos'; p.lengthMode = '$length'; p.floating = $floating; p.locked = true; } });"
+}
+
+# Colors, accent, terminal, keyboard layout — everything the mode defines.
+apply() {
+  local m=${1:-$(current_mode)} scheme layout prof
+  scheme=$(mode_var "$m" SCHEME)
+  if command -v plasma-apply-colorscheme >/dev/null; then
+    plasma-apply-colorscheme "$scheme" >/dev/null 2>&1 || kcfg --file kdeglobals --group General --key ColorScheme "$scheme"
+  fi
+  kcfg --file kdeglobals --group General --key AccentColor "$(mode_var "$m" ACCENT_RGB)"
+  kcfg --file kdeglobals --group General --key font "$(mode_var "$m" FONT),10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+  # Konsole: per-user copy of the NebulaOS profile with the mode's colors.
+  prof=${XDG_DATA_HOME:-$HOME/.local/share}/konsole/Nebula.profile
+  install -d "$(dirname "$prof")"
+  sed "s/^ColorScheme=.*/ColorScheme=$scheme/" /usr/share/konsole/Nebula.profile > "$prof"
+  # Keyboard layouts follow the interface language.
+  case $(nebula_lang) in
+    ru) layout=us,ru ;; uk) layout=us,ua ;; it) layout=it,us ;; *) layout=us ;;
+  esac
+  kcfg --file kxkbrc --group Layout --key Use true
+  kcfg --file kxkbrc --group Layout --key LayoutList "$layout"
+  kcfg --file kxkbrc --group Layout --key Options grp:alt_shift_toggle
+  kcfg --file kxkbrc --group Layout --key ResetOldOptions true
+  qdbus_ org.kde.keyboard /Layouts org.kde.KeyboardLayouts.reloadConfig 2>/dev/null || true
+  apply_wallpaper "$m"
+  apply_dock "$m"
+  qdbus_ org.kde.KWin /KWin reconfigure
+}
+
+
+install_packages() {
+  local m=$1 list=$SHARE/modes/$1/packages pkgs
+  mapfile -t pkgs < <(grep -Ev '^[[:space:]]*(#|$)' "$list")
+  if [[ $m == gaming ]] && ! pacman-conf --repo-list | grep -qx multilib; then
+    read -r -p "$(t 'Gaming needs the [multilib] repository. Enable it in /etc/pacman.conf? [y/N] ')" a
+    [[ $a == [yY]* ]] || die "$(t 'cancelled')"
+    sudo sed -i '/^#\[multilib\]/,/^#Include/ s/^#//' /etc/pacman.conf
+  fi
+  printf "$(t 'Packages for %s mode: %s\n')" "$m" "${pkgs[*]}"
+  sudo pacman -Syu --needed "${pkgs[@]}"
+  # A new kernel (linux-zen) shows up in the boot menu only after grub-mkconfig.
+  if [[ -f /boot/grub/grub.cfg ]] && command -v grub-mkconfig >/dev/null; then
+    sudo grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
+  fi
+}
+
+set_mode() {
+  install -d "$CONF"
+  printf '%s\n' "$1" > "$CONF/mode"
+  apply "$1"
+  command -v notify-send >/dev/null && notify-send -a NebulaOS -i nebulaos "$(t 'Mode:') $(t "$(mode_var "$1" TITLE)")" || true
+}
+
+cmd_mode() {
+  case ${1:-} in
+    '' | --current)
+      local m; m=$(current_mode)
+      if [[ ${2:-} == --pretty ]]; then t "$(mode_var "$m" TITLE)"; echo; else printf '%s\n' "$m"; fi ;;
+    --menu)
+      local choice m args=()
+      for m in "${MODES[@]}"; do args+=("$m" "$(t "$(mode_var "$m" TITLE)")" "$([[ $m == $(current_mode) ]] && echo on || echo off)"); done
+      choice=$(kdialog --title NebulaOS --radiolist "$(t 'Choose a mode')" "${args[@]}") || exit 0
+      is_mode "$choice" && set_mode "$choice" ;;
+    *)
+      is_mode "$1" || die "modes: ${MODES[*]}"
+      set_mode "$1"
+      [[ ${2:-} == --install ]] && install_packages "$1"
+      printf "$(t 'Mode: %s\n')" "$1" ;;
+  esac
+}
+
+cmd_settings() {
+  local key=${1:-} val=${2:-}
+  case $key in
+    wallpaper)
+      [[ $val == default || ( -f $val && ${val,,} =~ \.(png|jpe?g|webp)$ ) ]] || die "$(t 'need a .png/.jpg/.webp file or default')"
+      [[ $val == default ]] || val=$(realpath -- "$val") ;;
+    dock)
+      [[ $val =~ ^(bottom|left|right|default)$ ]] || die "$(t 'dock: bottom | left | right | default')" ;;
+    *) die "$(t 'only wallpaper and dock can be changed')" ;;
+  esac
+  install -d "$CONF"
+  { [[ -r $CONF/user.conf ]] && grep -Ev "^(${key}=|$)" "$CONF/user.conf" | grep -E '^(wallpaper|dock)=' || true
+    [[ $val == default ]] || printf '%s=%s\n' "$key" "$val"; } > "$CONF/user.conf.new"
+  mv -f "$CONF/user.conf.new" "$CONF/user.conf"
+  if [[ $key == wallpaper ]]; then apply_wallpaper "$(current_mode)"; else apply_dock "$(current_mode)"; fi
+  printf "$(t 'Saved: %s=%s\n')" "$key" "$val"
+}
+
+# Turbo mode for games: KWin effects/compositing pause until pressed again.
+cmd_perf() {
+  if [[ -e $CONF/.perf ]]; then
+    rm -f "$CONF/.perf"; qdbus_ org.kde.KWin /Compositor org.kde.kwin.Compositing.resume
+    notify-send -a NebulaOS "$(t 'Turbo mode off')" 2>/dev/null || true
+  else
+    install -d "$CONF"; : > "$CONF/.perf"; qdbus_ org.kde.KWin /Compositor org.kde.kwin.Compositing.suspend
+    notify-send -a NebulaOS "$(t 'Turbo mode: effects off')" 2>/dev/null || true
+  fi
+}
+
+VERSION_FILE=$SHARE/VERSION
+version() { cat "$VERSION_FILE" 2>/dev/null || echo dev; }
+hold() { printf "$(t '\nPress Enter to close…')"; read -r _ || true; }
+need() { command -v "$1" >/dev/null || die "missing command $1 (package ${2:-$1})"; }
+
+# ---------- Updates ----------
+ensure_repo() {
+  local conf=/etc/pacman.d/nebulaos-repo.conf
+  [[ -f $conf ]] && grep -q '^Server' "$conf" || return 0
+  grep -q 'nebulaos-repo.conf' /etc/pacman.conf && return 0
+  read -r -p "$(t 'Enable the NebulaOS update repository? [Y/n] ')" a
+  [[ $a == [nN]* ]] && return 0
+  printf '\nInclude = %s\n' "$conf" | sudo tee -a /etc/pacman.conf >/dev/null
+}
+cmd_update() {
+  if [[ ${1:-} == --notify ]]; then
+    # Background check (daily timer): a notification only when updates exist.
+    local n; n=$( (checkupdates 2>/dev/null || true) | wc -l)
+    local use; use=$(df --output=pcent / | tail -1 | tr -dc 0-9)
+    (( ${use:-0} >= 90 )) && notify-send -a NebulaOS -i drive-harddisk "$(t 'Disk almost full')" "nebula clean" 2>/dev/null
+    (( n > 0 )) && notify-send -a NebulaOS -i nebula-settings "$(t 'Updates available: %s%s' | sed "s/%s%s/$n/")"       "$(t 'Update the system')  —  nebula update" 2>/dev/null || true
+    return 0
+  fi
+  if [[ ${1:-} == --check ]]; then
+    local n=0 list
+    list=$( (checkupdates 2>/dev/null || true) )
+    [[ -n $list ]] && n=$(printf '%s\n' "$list" | wc -l)
+    if (( n > 0 )); then
+      local neb=''; grep -q '^nebulaos-' <<< "$list" && neb=' (includes a NebulaOS update)'
+      printf '{"text":"󰚰 %s","tooltip":"Updates available: %s%s","class":"updates"}\n' "$n" "$n" "$neb"
+    else
+      printf '{"text":"","tooltip":"System is up to date"}\n'
+    fi
+    return 0
+  fi
+  local before; before=$(version)
+  printf "$(t '\033[1mNebulaOS %s — update\033[0m\n')" "$before"
+  ensure_repo
+  if pacman -Q snap-pac >/dev/null 2>&1; then
+    printf "$(t 'snap-pac takes snapshots before and after the update (rollback: GRUB menu → snapshots).\n')"
+  fi
+  # The maintainer can hold back a broken NebulaOS release (signed channel).
+  local ign=() blocked repo_ver
+  blocked=$(cmd_news --blocked 2>/dev/null || true)
+  if [[ -n $blocked ]]; then
+    sudo pacman -Sy || { hold; return 1; }
+    repo_ver=$(pacman -Si nebulaos-desktop 2>/dev/null | awk '/^Version/ {print $3}' | cut -d- -f1)
+    if grep -qxF "$repo_ver" <<< "$blocked"; then
+      ign=(--ignore nebulaos-desktop)
+      printf "$(t 'NebulaOS %s is on hold by the NebulaOS team; other packages are updated.
+')" "$repo_ver"
+    fi
+  fi
+  sudo pacman -Syu "${ign[@]}" || { hold; return 1; }
+  local after; after=$(version)
+  if [[ $after != "$before" ]]; then
+    printf '\n\033[1mNebulaOS %s → %s. What is new:\033[0m\n' "$before" "$after"
+    sed -n "/^## $after/,/^## /p" "$SHARE/CHANGELOG.md" | sed '$d'
+    in_plasma && apply
+  fi
+  [[ -t 0 ]] && hold || true
+}
+
+# ---------- Drivers ----------
+cmd_drivers() {
+  local gpu pkgs=() multilib=0
+  gpu=$(lspci -nn | grep -Ei 'VGA|3D|Display' || true)
+  printf "$(t 'Graphics:\n%s\n\n')" "${gpu:-none found}"
+  pacman-conf --repo-list | grep -qx multilib && multilib=1
+  if grep -qi nvidia <<< "$gpu"; then
+    pkgs+=(nvidia-open nvidia-utils nvidia-settings)
+    (( multilib )) && pkgs+=(lib32-nvidia-utils)
+    printf "$(t 'NVIDIA: nvidia-open supports GTX 16xx / RTX 20xx and newer.\nOlder cards need a driver picked manually.\n')"
+  fi
+  if grep -Eqi 'AMD|ATI|Radeon' <<< "$gpu"; then
+    pkgs+=(mesa vulkan-radeon libva-mesa-driver)
+    (( multilib )) && pkgs+=(lib32-mesa lib32-vulkan-radeon)
+  fi
+  if grep -qi intel <<< "$gpu"; then
+    pkgs+=(mesa vulkan-intel intel-media-driver)
+    (( multilib )) && pkgs+=(lib32-mesa lib32-vulkan-intel)
+  fi
+  if grep -Eqi 'VMware|VirtualBox|QXL|Virtio|Red Hat' <<< "$gpu"; then
+    pkgs+=(mesa)
+  fi
+  (( ${#pkgs[@]} )) || { printf "$(t 'Nothing to install.\n')"; hold; return 0; }
+  printf "$(t 'Will install: %s\n')" "${pkgs[*]}"
+  sudo pacman -S --needed "${pkgs[@]}"
+  printf "$(t '\nDone. Please reboot.\n')"
+  [[ -t 0 ]] && hold || true
+}
+
+# ---------- Snapshots ----------
+cmd_snapshot() {
+  need snapper
+  case ${1:-list} in
+    list) sudo snapper -c root list ;;
+    create) sudo snapper -c root create -d "${2:-manual $(date +%F\ %R)}" && printf "$(t 'Snapshot created.\n')" ;;
+    *) die "$(t 'snapshot: list | create [description]')" ;;
+  esac
+}
+
+# ---------- Gaming ----------
+cmd_game() {
+  local envd=${XDG_CONFIG_HOME:-$HOME/.config}/environment.d
+  case "${1:-} ${2:-}" in
+    'mangohud on') install -d "$envd"; printf 'MANGOHUD=1\n' > "$envd/90-mangohud.conf"
+                   printf "$(t 'MangoHud enabled for all games (after re-login). Hide in game: Shift_R+F12.\n')" ;;
+    'mangohud off') rm -f "$envd/90-mangohud.conf"; printf "$(t 'MangoHud disabled (after re-login).\n')" ;;
+    *) die "$(t 'game mangohud on|off  (gamemode: set Steam launch option "gamemoderun %command%")')" ;;
+  esac
+}
+
+# ---------- Hacking: Tor and privacy ----------
+cmd_tor() {
+  case ${1:-status} in
+    on)  sudo systemctl start tor && printf "$(t 'Tor started: SOCKS5 127.0.0.1:9050. Run an app through Tor: torsocks <command>\n')" ;;
+    off) sudo systemctl stop tor && printf "$(t 'Tor stopped.\n')" ;;
+    status) systemctl is-active tor >/dev/null 2>&1 && echo "$(t 'Tor: on')" || echo "$(t 'Tor: off')" ;;
+    *) die "$(t 'tor on|off|status')" ;;
+  esac
+}
+cmd_privacy() {
+  local f=/etc/NetworkManager/conf.d/90-nebula-mac.conf
+  case "${1:-} ${2:-}" in
+    'mac on')
+      printf '[device]\nwifi.scan-rand-mac-address=yes\n\n[connection]\nwifi.cloned-mac-address=random\nethernet.cloned-mac-address=random\n' | sudo tee "$f" >/dev/null
+      sudo systemctl restart NetworkManager; printf "$(t 'Random MAC enabled.\n')" ;;
+    'mac off') sudo rm -f "$f"; sudo systemctl restart NetworkManager; printf "$(t 'Random MAC disabled.\n')" ;;
+    *) die "$(t 'privacy mac on|off')" ;;
+  esac
+}
+
+# ---------- Server ----------
+declare -A SRV_UNIT=([ssh]=sshd.service [docker]=docker.service [cockpit]=cockpit.socket [web]=nginx.service [db]=postgresql.service)
+declare -A SRV_PORT=([ssh]=22/tcp [cockpit]=9090/tcp [web]='80/tcp 443/tcp')
+cmd_server() {
+  case ${1:-status} in
+    status)
+      local k st
+      for k in ssh docker cockpit web db; do
+        st=$(systemctl is-active "${SRV_UNIT[$k]}" 2>/dev/null || true)
+        printf '  %-8s %-20s %s\n' "$k" "${SRV_UNIT[$k]}" "${st:-none}"
+      done
+      printf '  %-8s %s\n' firewall "$(sudo -n ufw status 2>/dev/null | head -1 || echo "$(t 'ufw: needs sudo')")" ;;
+    enable)
+      local k=${2:-}; [[ -n ${SRV_UNIT[$k]:-} ]] || die "enable: ${!SRV_UNIT[*]}"
+      if [[ $k == db && ! -d /var/lib/postgres/data/base ]]; then
+        sudo -iu postgres initdb -D /var/lib/postgres/data
+      fi
+      sudo systemctl enable --now "${SRV_UNIT[$k]}"
+      if [[ -n ${SRV_PORT[$k]:-} ]] && command -v ufw >/dev/null; then
+        for p in ${SRV_PORT[$k]}; do sudo ufw allow "$p" >/dev/null; done
+        printf "$(t 'Firewall ports opened: %s\n')" "${SRV_PORT[$k]}"
+      fi ;;
+    firewall)
+      need ufw
+      sudo ufw default deny incoming; sudo ufw default allow outgoing
+      systemctl is-active sshd >/dev/null 2>&1 && sudo ufw allow 22/tcp
+      sudo ufw --force enable && sudo systemctl enable --now ufw ;;
+    *) die "$(t 'server status | enable <ssh|docker|cockpit|web|db> | firewall')" ;;
+  esac
+}
+
+# ---------- Desktop extras ----------
+cmd_nightlight() {
+  local on; on=$(kreadconfig6 --file kwinrc --group NightColor --key Active 2>/dev/null || echo false)
+  if [[ $on == true ]]; then
+    kcfg --file kwinrc --group NightColor --key Active false
+    notify-send -a NebulaOS "$(t 'Night light off')" 2>/dev/null || true
+  else
+    kcfg --file kwinrc --group NightColor --key Active true
+    kcfg --file kwinrc --group NightColor --key Mode Constant
+    kcfg --file kwinrc --group NightColor --key NightTemperature 4200
+    notify-send -a NebulaOS "$(t 'Night light on')" 2>/dev/null || true
+  fi
+  qdbus_ org.kde.KWin /KWin reconfigure
+}
+
+# ---------- Power, Do Not Disturb, network ----------
+cmd_power() {
+  need powerprofilesctl power-profiles-daemon
+  case ${1:-get} in
+    get) powerprofilesctl get ;;
+    power-saver|balanced|performance) powerprofilesctl set "$1" && printf "$(t 'Power profile: %s\n')" "$1" ;;
+    *) die "$(t 'power get | power-saver | balanced | performance')" ;;
+  esac
+}
+
+# ---------- Hacking: practice labs (127.0.0.1 only) ----------
+declare -A LAB_IMAGE=([dvwa]=vulnerables/web-dvwa [juice-shop]=bkimminich/juice-shop [webgoat]=webgoat/webgoat)
+declare -A LAB_PORT=([dvwa]=8081:80 [juice-shop]=8082:3000 [webgoat]=8083:8080)
+cmd_lab() {
+  local name=${2:-}
+  case ${1:-list} in
+    list)
+      printf "$(t 'Practice vulnerable labs (reachable from this computer only):\n')"
+      for name in "${!LAB_IMAGE[@]}"; do printf "$(t '  %-11s http://127.0.0.1:%s\n')" "$name" "${LAB_PORT[$name]%%:*}"; done ;;
+    start)
+      [[ -n ${LAB_IMAGE[$name]:-} ]] || die "labs: ${!LAB_IMAGE[*]}"
+      need docker
+      sudo systemctl start docker
+      sudo docker run -d --rm --name "nebula-lab-$name" -p "127.0.0.1:${LAB_PORT[$name]}" "${LAB_IMAGE[$name]}" >/dev/null
+      printf "$(t 'Lab %s is running: http://127.0.0.1:%s (stop: nebula lab stop %s)\n')" "$name" "${LAB_PORT[$name]%%:*}" "$name" ;;
+    stop)
+      [[ -n ${LAB_IMAGE[$name]:-} ]] || die "labs: ${!LAB_IMAGE[*]}"
+      sudo docker stop "nebula-lab-$name" >/dev/null && printf "$(t 'Lab %s stopped.\n')" "$name" ;;
+    *) die "$(t 'lab list | start <lab> | stop <lab>')" ;;
+  esac
+}
+cmd_private_browser() {
+  local profile; profile=$(mktemp -d)
+  if command -v firejail >/dev/null; then
+    spawn firejail --private --dns=1.1.1.1 firefox --no-remote --private-window
+  else
+    spawn firefox --no-remote --profile "$profile" --private-window
+  fi
+}
+
+# ---------- Server: ready-made templates (docker compose) ----------
+cmd_template() {
+  local name=${2:-} dir tpl
+  case ${1:-list} in
+    list)
+      printf "$(t 'Templates: ')"; ls "$SHARE/templates"; ;;
+    deploy)
+      tpl=$SHARE/templates/$name
+      [[ -n $name && -f $tpl/compose.yaml ]] || die "templates: $(ls "$SHARE/templates" | tr '\n' ' ')"
+      need docker
+      dir=/srv/nebula/$name
+      sudo install -d "$dir" && sudo cp -n "$tpl/compose.yaml" "$dir/"
+      if [[ $name == minecraft ]] && grep -q 'EULA: "FALSE"' "$dir/compose.yaml"; then
+        read -r -p "$(t 'Do you accept the Minecraft EULA (https://aka.ms/MinecraftEULA)? [y/N] ')" a
+        [[ $a == [yY]* ]] || die "$(t 'the server will not start without accepting the EULA')"
+        sudo sed -i 's/EULA: "FALSE"/EULA: "TRUE"/' "$dir/compose.yaml"
+      fi
+      sudo systemctl enable --now docker
+      (cd "$dir" && sudo docker compose up -d)
+      if command -v ufw >/dev/null && [[ -f $tpl/ports ]]; then
+        while read -r p; do [[ -n $p ]] && sudo ufw allow "$p" >/dev/null; done < "$tpl/ports"
+      fi
+      printf "$(t 'Done: %s (%s). Ports: %s\n')" "$name" "$dir" "$(tr '\n' ' ' < "$tpl/ports" 2>/dev/null)" ;;
+    remove)
+      dir=/srv/nebula/$name; [[ -f $dir/compose.yaml ]] || die "not deployed: $name"
+      (cd "$dir" && sudo docker compose down) ;;
+    *) die "$(t 'template list | deploy <template> | remove <template>')" ;;
+  esac
+}
+
+# ---------- Home folder backups ----------
+cmd_backup() {
+  local dest_file=$CONF/backup-dest dest units=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
+  case ${1:-run} in
+    set)
+      [[ -d ${2:-} ]] || die "$(t 'backup set <folder or mounted drive>')"
+      install -d "$CONF"; realpath -- "$2" > "$dest_file"; printf "$(t 'Backups will go to: %s\n')" "$(cat "$dest_file")" ;;
+    run)
+      [[ -r $dest_file ]] || die "$(t 'first run: nebula backup set <folder>')"
+      dest=$(cat "$dest_file")/$(hostname)-$USER
+      install -d "$dest"
+      rsync -a --delete --info=progress2 --exclude '.cache/' --exclude 'Downloads/' --exclude '.local/share/Steam/' \
+        "$HOME/" "$dest/home/"
+      date '+%F %R' > "$dest/last-backup"
+      notify-send -a NebulaOS "Backup finished: $dest" 2>/dev/null || true ;;
+    auto)
+      case ${2:-} in
+        on)
+          install -d "$units"
+          printf '[Unit]\nDescription=NebulaOS backup\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/nebula backup run\n' > "$units/nebula-backup.service"
+          printf '[Unit]\nDescription=NebulaOS daily backup\n\n[Timer]\nOnCalendar=daily\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n' > "$units/nebula-backup.timer"
+          systemctl --user daemon-reload && systemctl --user enable --now nebula-backup.timer
+          printf "$(t 'Daily backups enabled.\n')" ;;
+        off) systemctl --user disable --now nebula-backup.timer 2>/dev/null; printf "$(t 'Daily backups disabled.\n')" ;;
+        *) die "$(t 'backup auto on|off')" ;;
+      esac ;;
+    *) die "$(t 'backup set <folder> | run | auto on|off')" ;;
+  esac
+}
+
+# ---------- Automatic mode switching ----------
+cmd_automode() {
+  case ${1:-status} in
+    on)  install -d "$CONF"; : > "$CONF/automode"; { pkill -f nebula-automode || true; setsid -f nebula-automode >/dev/null 2>&1 < /dev/null; }
+         printf "$(t 'Auto mode on: Steam/games → Gaming, Wireshark/Ghidra → Hacking.\n')" ;;
+    off) rm -f "$CONF/automode"; pkill -f nebula-automode || true; printf "$(t 'Auto mode off.\n')" ;;
+    status) [[ -e $CONF/automode ]] && echo on || echo off ;;
+    *) die "$(t 'automode on|off|status')" ;;
+  esac
+}
+
+# ---------- Language ----------
+cmd_lang() {
+  local l=${1:-} loc envd=${XDG_CONFIG_HOME:-$HOME/.config}/environment.d
+  if [[ -z $l ]]; then nebula_lang; echo; return 0; fi
+  case $l in
+    en) loc=en_US.UTF-8 ;; ru) loc=ru_RU.UTF-8 ;; uk) loc=uk_UA.UTF-8 ;; it) loc=it_IT.UTF-8 ;;
+    *) die 'lang: en | ru | uk | it' ;;
+  esac
+  install -d "$CONF" "$envd"
+  printf '%s\n' "$l" > "$CONF/lang"
+  printf 'LANG=%s\n' "$loc" > "$envd/90-nebula-lang.conf"
+  NEBULA_TR=(); nebula_load_tr
+  in_plasma && apply "$(current_mode)"
+  printf "$(t 'Language: %s. Other apps switch after you log in again.\n')" "$l"
+}
+
+say() { printf '%s\n' "$*"; }
+
+# ---------- Clean up ----------
+cmd_clean() {
+  local before after
+  before=$(df -B1 --output=avail / | tail -1)
+  say "$(t 'Cleaning the package cache, orphans, old logs and thumbnails…')"
+  rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/thumbnails" 2>/dev/null || true
+  sudo bash -c '
+    command -v paccache >/dev/null && paccache -rk1 >/dev/null && paccache -ruk0 >/dev/null
+    orphans=$(pacman -Qdtq || true); [[ -n $orphans ]] && pacman -Rns --noconfirm $orphans >/dev/null
+    journalctl --vacuum-time=14d >/dev/null 2>&1
+    command -v flatpak >/dev/null && flatpak uninstall --unused -y >/dev/null 2>&1
+    true'
+  after=$(df -B1 --output=avail / | tail -1)
+  printf "$(t 'Freed: %s\n')" "$(numfmt --to=iec $(( after > before ? after - before : 0 )))"
+}
+
+# ---------- Health check ----------
+cmd_doctor() {
+  local problems=0 use failed
+  check() {
+    if bash -c "$2" >/dev/null 2>&1; then printf '  ✓ %s\n' "$(t "$1")"
+    else printf '  ✗ %s  →  %s\n' "$(t "$1")" "$3"; problems=$((problems + 1)); fi
+  }
+  say "$(t 'NebulaOS health check')"
+  failed=$(systemctl --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | xargs)
+  use=$(df --output=pcent / | tail -1 | tr -dc 0-9)
+  check 'Internet connection' 'ping -c1 -W3 1.1.1.1' "$(t 'Settings → Wi-Fi')"
+  check 'Name resolution (DNS)' 'getent hosts archlinux.org' 'nmcli networking off; nmcli networking on'
+  check 'System services' "[[ -z '$failed' ]]" "systemctl status $failed"
+  check 'Free disk space' "(( ${use:-0} < 90 ))" 'nebula clean'
+  check 'Package database not locked' '[[ ! -e /var/lib/pacman/db.lck ]] || pgrep -x pacman' 'sudo rm /var/lib/pacman/db.lck'
+  check 'Graphics driver' 'lspci -k | grep -A3 -E "VGA|3D" | grep -q "Kernel driver in use"' 'nebula drivers'
+  check 'Sound' 'pactl info' 'systemctl --user restart pipewire wireplumber'
+  check 'Firewall' 'systemctl is-active ufw' "$(t 'Settings → Privacy and security')"
+  check 'AI assistant service' 'systemctl is-active ollama' 'sudo systemctl enable --now ollama'
+  echo
+  if (( problems )); then printf "$(t 'Problems found: %s. You can ask the assistant (Super+A) to help.\n')" "$problems"
+  else say "$(t 'Everything is fine.')"; fi
+}
+
+# ---------- Battery care ----------
+cmd_battery() {
+  local f v=100 rule=/etc/tmpfiles.d/nebula-battery.conf
+  f=$(ls /sys/class/power_supply/BAT*/charge_control_end_threshold 2>/dev/null | head -1)
+  case ${1:-status} in
+    status)
+      [[ -n $f ]] || { say "$(t 'This laptop does not support a charge limit.')"; return 1; }
+      printf "$(t 'Charge limit: %s%%\n')" "$(cat "$f")" ;;
+    on|off)
+      [[ -n $f ]] || die "$(t 'This laptop does not support a charge limit.')"
+      [[ $1 == on ]] && v=80
+      echo "w $f - - - - $v" | sudo tee "$rule" >/dev/null && echo "$v" | sudo tee "$f" >/dev/null
+      printf "$(t 'Charge limit: %s%%\n')" "$v" ;;
+    *) die 'battery: status | on | off' ;;
+  esac
+}
+
+# ---------- Shortcuts cheat sheet ----------
+cmd_keys() {
+  local text
+  text="Super — $(t 'Apps menu')
+Super+H — $(t 'NebulaOS Settings')
+Super+A — Nebula AI
+Super+M — $(t 'Switch mode')
+Super+Shift+A — Nebula Store
+Super+Enter — $(t 'Terminal')
+Super+E — $(t 'Files')
+Super+Shift+S — $(t 'Screenshot of an area')
+Super+Shift+R — $(t 'Record the screen')
+Super+V — $(t 'Clipboard history')
+Super+. — $(t 'Emoji')
+Alt+Space — $(t 'Search apps, files, calculator')
+Super+← / → — $(t 'Window to the left / right half')
+Super+Q — $(t 'Close window')
+Super+↑ / ↓ — $(t 'Maximize / minimize')
+Super+L — $(t 'Lock the screen')
+Super+/ — $(t 'Keyboard shortcuts')
+$(t 'Top-left corner — all windows')"
+  if [[ -n ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] && command -v kdialog >/dev/null; then
+    kdialog --title "$(t 'Keyboard shortcuts')" --msgbox "$text"
+  else printf '%s\n' "$text"; fi
+}
+
+# ---------- NebulaOS channel: news, support address, latest version ----------
+# A JSON file in the NebulaOS GitHub repository; no server of our own.
+CHANNEL_URL=${NEBULA_CHANNEL_URL:-https://raw.githubusercontent.com/matvijaskiv-svg/NebulaOS/main/channel/channel.json}
+cmd_news() {
+  local dir=${XDG_CACHE_HOME:-$HOME/.cache}/nebulaos tmp
+  install -d "$dir" "$CONF"
+  tmp=$(mktemp -d)
+  # Download channel.json + channel.sig; keep them only if the maintainer's signature is valid.
+  if curl -fsSL --max-time 15 "$CHANNEL_URL" -o "$tmp/channel.json" 2>/dev/null &&
+     curl -fsSL --max-time 15 "${CHANNEL_URL%.json}.sig" -o "$tmp/channel.sig" 2>/dev/null &&
+     python3 -c 'import sys; sys.path.insert(0, "/usr/lib/nebulaos"); import nebula_sign as s; d = sys.argv[1]
+sys.exit(0 if s.trusted(open(d + "/channel.json", "rb").read(), open(d + "/channel.sig").read()) else 1)' "$tmp" 2>/dev/null; then
+    mv -f "$tmp/channel.json" "$tmp/channel.sig" "$dir/"
+  fi
+  rm -rf "$tmp"
+  python3 - "$dir" "$CONF/news-seen" "$(version)" "${1:-}" <<'PY'
+import hashlib, json, shlex, subprocess, sys, urllib.request
+from pathlib import Path
+sys.path.insert(0, "/usr/lib/nebulaos")
+import nebula_sign
+cache, seen_file, mine, mode = sys.argv[1:5]
+data = {}
+for d in (Path(cache), Path("/usr/share/nebulaos")):
+    try:
+        raw, sig = (d / "channel.json").read_bytes(), (d / "channel.sig").read_text()
+    except OSError:
+        continue
+    if nebula_sign.trusted(raw, sig):
+        data = json.loads(raw.decode())
+        break
+seen_path = Path(seen_file)
+seen = set(seen_path.read_text().split()) if seen_path.exists() else set()
+
+def newer(a, b):
+    try:
+        return tuple(int(x) for x in a.split(".")) > tuple(int(x) for x in b.split("."))
+    except ValueError:
+        return False
+
+def note(title, text, urgency="normal", action=None):
+    """A notification; with an action button it waits in the background for the click."""
+    base = ["notify-send", "-a", "NebulaOS", "-u", urgency, "-i", "nebulaos", title, text]
+    if not action:
+        subprocess.run(base, check=False)
+        return
+    label, command = action
+    script = f'[ "$({shlex.join(base)} -A go={shlex.quote(label)} --wait)" = go ] && {command}'
+    subprocess.Popen(["bash", "-c", script], start_new_session=True,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+ACTIONS = {"update": ("Update", "konsole --profile Nebula -e nebula update"),
+           "chat": ("Open", "nebula-chat"), "settings": ("Open", "nebula-hub")}
+latest, news = str(data.get("latest", "")), data.get("news", [])
+if mode == "--notify":
+    for n in news:
+        nid = str(n.get("id", ""))
+        if nid and nid not in seen:
+            act = n.get("action", "")
+            action = ACTIONS.get(act)
+            if act.startswith("https://"):
+                action = ("Open", f"xdg-open {shlex.quote(act)}")
+            note(n.get("title", "NebulaOS"), n.get("text", ""),
+                 "critical" if n.get("level") == "important" else "normal", action)
+            seen.add(nid)
+    for p in data.get("polls", []):
+        pid = "poll-" + str(p.get("id", ""))
+        if pid not in seen:
+            note("📊 " + str(p.get("question", "")), "Nebula Chat → Feed", action=("Vote", "nebula-chat"))
+            seen.add(pid)
+    wp = data.get("wallpaper") or {}
+    if wp.get("url", "").startswith("https://") and wp.get("sha256") and "wp-" + wp["sha256"] not in seen:
+        try:
+            with urllib.request.urlopen(wp["url"], timeout=60) as r:
+                raw = r.read(30_000_000)
+            if hashlib.sha256(raw).hexdigest() == wp["sha256"]:
+                out = Path.home() / ".local/share/nebulaos/wallpapers"
+                out.mkdir(parents=True, exist_ok=True)
+                path = out / (wp["sha256"][:12] + Path(wp["url"]).suffix.lower()[:5])
+                path.write_bytes(raw)
+                note("🖼 " + wp.get("title", "Wallpaper of the week"), "NebulaOS",
+                     action=("Set", f"nebula settings wallpaper {shlex.quote(str(path))}"))
+                seen.add("wp-" + wp["sha256"])
+        except Exception:
+            pass
+    if latest and newer(latest, mine) and f"v{latest}" not in seen:
+        note(f"NebulaOS {latest}", "nebula update", action=ACTIONS["update"])
+        seen.add(f"v{latest}")
+    seen_path.write_text("\n".join(sorted(seen)) + "\n")
+elif mode == "--blocked":
+    print("\n".join(str(v) for v in data.get("blocked_versions", [])))
+else:
+    for n in news[-10:]:
+        print(f"• {n.get('title', '')}\n  {n.get('text', '')}\n")
+    if latest and newer(latest, mine):
+        print(f"NebulaOS {latest} → nebula update")
+PY
+}
+
+case ${1:-} in
+  apply) shift; apply "$@" ;;
+  mode) shift; cmd_mode "$@" ;;
+  settings) shift; cmd_settings "$@" ;;
+  perf) cmd_perf ;;
+  update) shift; cmd_update "$@" ;;
+  drivers) cmd_drivers ;;
+  snapshot) shift; cmd_snapshot "$@" ;;
+  game) shift; cmd_game "$@" ;;
+  tor) shift; cmd_tor "$@" ;;
+  privacy) shift; cmd_privacy "$@" ;;
+  server) shift; cmd_server "$@" ;;
+  nightlight) cmd_nightlight ;;
+  hub|settings-app) exec nebula-hub ;;
+  power) shift; cmd_power "$@" ;;
+  lab) shift; cmd_lab "$@" ;;
+  private-browser) cmd_private_browser ;;
+  template) shift; cmd_template "$@" ;;
+  backup) shift; cmd_backup "$@" ;;
+  automode) shift; cmd_automode "$@" ;;
+  store) exec nebula-store ;;
+  lang) shift; cmd_lang "$@" ;;
+  version|--version) printf "$(t 'NebulaOS %s\n')" "$(version)" ;;
+  term) shift; if [[ ${1:-} == -e ]]; then shift; exec konsole --profile Nebula -e "$@"; else exec konsole --profile Nebula "$@"; fi ;;
+  lock) exec loginctl lock-session ;;
+  clean) cmd_clean ;;
+  doctor) cmd_doctor ;;
+  battery) shift; cmd_battery "$@" ;;
+  keys) cmd_keys ;;
+  news) shift; cmd_news "$@" ;;
+  chat) exec nebula-chat ;;
+  admin) command -v nebula-admin >/dev/null || die "the admin panel is not installed (tools/admin in the NebulaOS repository)"; exec nebula-admin ;;
+  *) sed -n '2,32s/^# \{0,1\}//p' "$0"; exit 2 ;;
+esac

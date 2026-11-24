@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Nebula Chat
+Exec=nebula-chat --tray
+Icon=nebula-chat
+X-KDE-autostart-phase=2
+NoDisplay=true

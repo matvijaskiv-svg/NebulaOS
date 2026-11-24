@@ -1,0 +1,1422 @@
+#!/usr/bin/env python3
+"""Nebula Chat — messenger and feed for NebulaOS users, without a server.
+
+Tox underneath: peer-to-peer, end-to-end encrypted. Private chats, groups with
+roles (owner, moderators), photos and files, profiles with avatars, "typing…",
+delivered / seen ticks, a feed of posts with likes, polls and official groups
+from the signed NebulaOS channel.
+
+    nebula-chat                      open the window
+    nebula-chat --tray               start in the system tray (autostart)
+    nebula-chat --print-id           print your Nebula ID
+    nebula-chat --create-group NAME  (admin) create a group in the running app, print its code
+"""
+import base64
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, QIcon, app, background, fit, tile  # noqa: E402
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QSize, Qt, QTimer  # noqa: E402
+from PySide6.QtGui import QAction, QColor, QGuiApplication, QImage, QPainter, QPainterPath, QPixmap  # noqa: E402
+from PySide6.QtNetwork import QLocalServer, QLocalSocket  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QButtonGroup, QDialog, QDialogButtonBox, QFileDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+    QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
+    QStackedWidget, QSystemTrayIcon, QToolButton, QVBoxLayout, QWidget,
+)
+import nebula_sign  # noqa: E402
+import nebula_tox  # noqa: E402
+
+DATA = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "nebula-chat"
+MEDIA = DATA / "media"
+PROFILE = DATA / "profile.tox"
+STATE = DATA / "chats.json"
+NODES = DATA / "nodes.json"
+STATS = DATA / "community.json"          # what the admin panel reads
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "nebulaos"
+PREFIX = "NebulaOS|"
+SUPPORT_NAME = "NebulaOS Support"
+ONLINE, OFFLINE, ACCENT = "#22c55e", "#6b7280", "#8b5cf6"
+NAME_COLORS = ["#f472b6", "#60a5fa", "#34d399", "#fbbf24", "#a78bfa", "#fb7185", "#2dd4bf", "#f97316"]
+BUBBLE = {
+    True: "background: palette(highlight); color: palette(highlighted-text); border-radius: 14px; padding: 8px 12px;",
+    False: "background: palette(base); border: 1px solid palette(midlight); border-radius: 14px; padding: 8px 12px;",
+}
+
+
+# ---------- helpers ----------
+def my_name():
+    try:
+        import pwd
+        e = pwd.getpwuid(os.getuid())
+        return e.pw_gecos.split(",")[0] or e.pw_name
+    except (KeyError, ImportError):
+        return os.environ.get("USER", "NebulaOS user")
+
+
+def channel():
+    """The NebulaOS channel, only if signed by the maintainer (else empty)."""
+    for d in (CACHE, Path("/usr/share/nebulaos")):
+        try:
+            raw = (d / "channel.json").read_bytes()
+            sig = (d / "channel.sig").read_text()
+        except OSError:
+            continue
+        if nebula_sign.trusted(raw, sig):
+            return json.loads(raw.decode())
+    return {}
+
+
+def is_valid_id(text, size=nebula_tox.ADDRESS_SIZE):
+    t = text.strip().upper()
+    return len(t) == size * 2 and all(c in "0123456789ABCDEF" for c in t)
+
+
+def notify(title, body):
+    try:
+        subprocess.Popen(["notify-send", "-a", "Nebula Chat", "-i", "nebula-chat", title, body[:200]])
+    except OSError:
+        pass
+
+
+def store_media(raw: bytes, ext):
+    MEDIA.mkdir(parents=True, exist_ok=True)
+    path = MEDIA / (hashlib.sha256(raw).hexdigest()[:24] + ext)
+    if not path.exists():
+        path.write_bytes(raw)
+    return str(path)
+
+
+def jpeg(path_or_image, size, quality=82):
+    img = QImage(path_or_image) if isinstance(path_or_image, str) else path_or_image
+    if img.isNull():
+        return b""
+    if max(img.width(), img.height()) > size:
+        img = img.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    ba = QByteArray()
+    buf = QBuffer(ba)
+    buf.open(QIODevice.WriteOnly)
+    img.save(buf, "JPEG", quality)
+    return bytes(ba)
+
+
+def square_avatar(path):
+    img = QImage(path)
+    if img.isNull():
+        return b""
+    side = min(img.width(), img.height())
+    img = img.copy((img.width() - side) // 2, (img.height() - side) // 2, side, side)
+    return jpeg(img, 160, 85)
+
+
+def avatar_pixmap(path, name, size=34):
+    """Round avatar: the photo, or the first letter on a colour."""
+    pm = QPixmap(size * 2, size * 2)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    clip = QPainterPath()
+    clip.addEllipse(0, 0, size * 2, size * 2)
+    p.setClipPath(clip)
+    src = QPixmap(path) if path and Path(path).exists() else QPixmap()
+    if not src.isNull():
+        p.drawPixmap(0, 0, src.scaled(size * 2, size * 2, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+    else:
+        p.fillRect(0, 0, size * 2, size * 2, QColor(NAME_COLORS[sum(map(ord, name or "?")) % len(NAME_COLORS)]))
+        p.setPen(QColor("white"))
+        font = p.font()
+        font.setPixelSize(int(size * 0.95))
+        font.setBold(True)
+        p.setFont(font)
+        p.drawText(pm.rect(), Qt.AlignCenter, (name or "?")[:1].upper())
+    p.end()
+    pm.setDevicePixelRatio(2)
+    return pm
+
+
+def when(ts):
+    t = time.localtime(ts)
+    return time.strftime("%H:%M", t) if time.strftime("%Y%m%d", t) == time.strftime("%Y%m%d") \
+        else time.strftime("%d.%m %H:%M", t)
+
+
+class Chat(QMainWindow):
+    def __init__(self, tox):
+        super().__init__()
+        self.tox = tox
+        self.setWindowTitle("Nebula Chat")
+        self.state = self.load()
+        self.online, self.typing_now, self.peers = {}, {}, {}
+        self.current = None              # "u:<pk>" or "g:<chat_id>"
+        self.channel = channel()
+        self.banned = set(self.channel.get("banned", []))
+        for ev in ("request", "message", "online", "friend_status", "typing", "receipt", "name", "data",
+                   "group_message", "group_data", "group_invite", "group_peer", "group_ready"):
+            setattr(tox, "on_" + ev, getattr(self, "ev_" + ev))
+        tox.set_status(self.state["me"].get("status", ""))
+        self.build_ui()
+        self.refresh()
+        for row in range(self.list.count()):
+            if self.list.item(row).data(Qt.UserRole)[0] in ("u", "g"):
+                self.list.setCurrentRow(row)
+                break
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.tick)
+        self.timer.start(50)
+        self.saver = QTimer(self)
+        self.saver.timeout.connect(self.housekeeping)
+        self.saver.start(30000)
+        self.typing_off = QTimer(self)
+        self.typing_off.setSingleShot(True)
+        self.typing_off.timeout.connect(lambda: self.current and self.current[0] == "u"
+                                        and self.tox.typing(self.current[2:], False))
+        background(lambda: nebula_tox.load_nodes(NODES), self.got_nodes)
+        QTimer.singleShot(4000, self.join_official)
+        fit(self, 1040, 700)
+
+    # =============== state ===============
+    def load(self):
+        try:
+            s = json.loads(STATE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            s = {}
+        for k in ("contacts", "groups", "requests", "invites", "posts", "votes"):
+            s.setdefault(k, {})
+        s.setdefault("me", {})
+        return s
+
+    def save(self):
+        DATA.mkdir(parents=True, exist_ok=True)
+        tmp = STATE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self.state, ensure_ascii=False), encoding="utf-8")
+        os.chmod(tmp, 0o600)
+        tmp.replace(STATE)
+
+    def contact(self, pk, name=None):
+        c = self.state["contacts"].setdefault(pk, {"name": name or pk[:8], "messages": []})
+        if name and c["name"] == pk[:8]:
+            c["name"] = name
+        return c
+
+    def group(self, cid):
+        return self.state["groups"].setdefault(cid, {"name": self.tox.group_name(cid) or cid[:8], "messages": []})
+
+    def chat(self, key):
+        return self.contact(key[2:]) if key[0] == "u" else self.group(key[2:])
+
+    # =============== UI ===============
+    def build_ui(self):
+        side = QWidget()
+        side.setFixedWidth(300)
+        sv = QVBoxLayout(side)
+        sv.setContentsMargins(12, 12, 12, 12)
+        sv.setSpacing(8)
+        head = QHBoxLayout()
+        self.me_btn = QToolButton()
+        self.me_btn.setIconSize(QSize(34, 34))
+        self.me_btn.setAutoRaise(True)
+        self.me_btn.setToolTip(_("My profile"))
+        self.me_btn.clicked.connect(self.edit_profile)
+        head.addWidget(self.me_btn)
+        title_box = QVBoxLayout()
+        title_box.setSpacing(0)
+        title = QLabel("Nebula Chat")
+        f = title.font()
+        f.setPointSizeF(f.pointSizeF() * 1.25)
+        f.setBold(True)
+        title.setFont(f)
+        self.status_text = QLabel(_("Connecting…"))
+        self.status_text.setStyleSheet("color: palette(placeholder-text); font-size: 9pt;")
+        title_box.addWidget(title)
+        title_box.addWidget(self.status_text)
+        head.addLayout(title_box, 1)
+        new = QToolButton()
+        new.setIcon(QIcon.fromTheme("list-add"))
+        new.setToolTip(_("New"))
+        new.setPopupMode(QToolButton.InstantPopup)
+        menu = QMenu(new)
+        menu.addAction(QIcon.fromTheme("list-add-user"), _("Add contact"), self.add_contact)
+        menu.addAction(QIcon.fromTheme("system-users"), _("New group"), self.new_group)
+        menu.addAction(QIcon.fromTheme("go-jump"), _("Join a group by code"), self.join_group)
+        menu.addSeparator()
+        menu.addAction(QIcon.fromTheme("edit-copy"), _("Copy my Nebula ID"), self.copy_my_id)
+        new.setMenu(menu)
+        head.addWidget(new)
+        sv.addLayout(head)
+
+        tabs = QHBoxLayout()
+        self.tab_group = QButtonGroup(self)
+        for i, label in enumerate((_("Chats"), _("Feed"))):
+            b = QPushButton(label)
+            b.setCheckable(True)
+            b.setChecked(i == 0)
+            self.tab_group.addButton(b, i)
+            tabs.addWidget(b)
+        self.tab_group.idClicked.connect(self.switch_tab)
+        sv.addLayout(tabs)
+        self.search = QLineEdit()
+        self.search.setPlaceholderText(_("Search"))
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(lambda _t: self.refresh())
+        sv.addWidget(self.search)
+        self.list = QListWidget()
+        self.list.setObjectName("nav")
+        self.list.setIconSize(QSize(34, 34))
+        self.list.currentItemChanged.connect(self.open_item)
+        self.list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.list.customContextMenuRequested.connect(lambda pos: self.chat_menu(self.list.itemAt(pos), pos))
+        sv.addWidget(self.list, 1)
+        help_btn = QPushButton(tile("help-contents", "#16a34a", 18), _("Message NebulaOS Support"))
+        help_btn.clicked.connect(self.open_support)
+        sv.addWidget(help_btn)
+
+        self.stack = QStackedWidget()
+        empty = QLabel(_("Choose a chat or add a contact by their Nebula ID.") + "\n"
+                       + _("Messages go directly between computers, encrypted — there is no server."))
+        empty.setAlignment(Qt.AlignCenter)
+        empty.setWordWrap(True)
+        empty.setStyleSheet("color: palette(placeholder-text);")
+        self.stack.addWidget(empty)
+        self.stack.addWidget(self.build_conversation())
+        self.stack.addWidget(self.build_feed())
+
+        body = QWidget()
+        lay = QHBoxLayout(body)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(side)
+        line = QFrame()
+        line.setFrameShape(QFrame.VLine)
+        line.setStyleSheet("color: palette(midlight);")
+        lay.addWidget(line)
+        lay.addWidget(self.stack, 1)
+        self.setCentralWidget(body)
+        self.update_me()
+
+        self.tray = QSystemTrayIcon(QIcon.fromTheme("nebula-chat"), self)
+        tm = QMenu()
+        tm.addAction(_("Open Nebula Chat"), self.bring_up)
+        tm.addAction(_("Quit"), self.quit)
+        self.tray.setContextMenu(tm)
+        self.tray.activated.connect(lambda r: self.bring_up() if r == QSystemTrayIcon.Trigger else None)
+        self.tray.show()
+
+    def build_conversation(self):
+        conv = QWidget()
+        cv = QVBoxLayout(conv)
+        cv.setContentsMargins(18, 12, 18, 14)
+        cv.setSpacing(10)
+        top = QHBoxLayout()
+        self.peer_avatar = QLabel()
+        top.addWidget(self.peer_avatar)
+        names = QVBoxLayout()
+        names.setSpacing(0)
+        self.peer_name = QLabel()
+        f = self.peer_name.font()
+        f.setPointSizeF(f.pointSizeF() * 1.15)
+        f.setBold(True)
+        self.peer_name.setFont(f)
+        self.peer_state = QLabel()
+        self.peer_state.setStyleSheet("color: palette(placeholder-text); font-size: 9pt;")
+        names.addWidget(self.peer_name)
+        names.addWidget(self.peer_state)
+        top.addLayout(names, 1)
+        more = QToolButton()
+        more.setIcon(QIcon.fromTheme("overflow-menu", QIcon.fromTheme("application-menu")))
+        more.setAutoRaise(True)
+        more.clicked.connect(lambda: self.chat_menu(None, None))
+        top.addWidget(more)
+        cv.addLayout(top)
+        self.pinned = QLabel()
+        self.pinned.setWordWrap(True)
+        self.pinned.setStyleSheet("background: palette(alternate-base); border-radius: 8px; padding: 6px 10px;")
+        cv.addWidget(self.pinned)
+        self.request_bar = QFrame()
+        self.request_bar.setObjectName("group")
+        rb = QHBoxLayout(self.request_bar)
+        rb.setContentsMargins(12, 8, 12, 8)
+        self.request_text = QLabel()
+        self.request_text.setWordWrap(True)
+        accept = QPushButton(_("Accept"))
+        accept.setDefault(True)
+        accept.clicked.connect(self.accept_current)
+        decline = QPushButton(_("Decline"))
+        decline.clicked.connect(self.decline_current)
+        rb.addWidget(self.request_text, 1)
+        rb.addWidget(decline)
+        rb.addWidget(accept)
+        cv.addWidget(self.request_bar)
+        self.msgs = QVBoxLayout()
+        self.msgs.setSpacing(6)
+        self.msgs.addStretch(1)
+        host = QWidget()
+        host.setLayout(self.msgs)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setWidget(host)
+        cv.addWidget(self.scroll, 1)
+        bottom = QHBoxLayout()
+        attach = QToolButton()
+        attach.setIcon(QIcon.fromTheme("mail-attachment", QIcon.fromTheme("document-open")))
+        attach.setToolTip(_("Photo or file"))
+        attach.clicked.connect(self.attach)
+        self.entry = QLineEdit()
+        self.entry.setPlaceholderText(_("Message…  (Enter to send)"))
+        self.entry.setMinimumHeight(34)
+        self.entry.returnPressed.connect(self.send)
+        self.entry.textEdited.connect(self.on_typing)
+        send = QPushButton(QIcon.fromTheme("document-send"), _("Send"))
+        send.clicked.connect(self.send)
+        bottom.addWidget(attach)
+        bottom.addWidget(self.entry, 1)
+        bottom.addWidget(send)
+        self.bottom_bar = QWidget()
+        self.bottom_bar.setLayout(bottom)
+        bottom.setContentsMargins(0, 0, 0, 0)
+        cv.addWidget(self.bottom_bar)
+        return conv
+
+    def build_feed(self):
+        page = QScrollArea()
+        page.setWidgetResizable(True)
+        page.setFrameShape(QFrame.NoFrame)
+        host = QWidget()
+        self.feed = QVBoxLayout(host)
+        self.feed.setContentsMargins(24, 16, 24, 16)
+        self.feed.setSpacing(12)
+        page.setWidget(host)
+        return page
+
+    def switch_tab(self, i):
+        if i == 1:
+            self.render_feed()
+            self.stack.setCurrentIndex(2)
+        else:
+            self.stack.setCurrentIndex(1 if self.current else 0)
+
+    def update_me(self):
+        self.me_btn.setIcon(QIcon(avatar_pixmap(self.state["me"].get("avatar"), self.tox.name, 34)))
+
+    def clear_layout(self, layout, keep_last=0):
+        while layout.count() > keep_last:
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                self.clear_layout(item.layout())
+
+    # =============== chat list ===============
+    def refresh(self):
+        q = self.search.text().strip().lower()
+        self.list.blockSignals(True)
+        self.list.clear()
+        keep = None
+
+        def add(kind, key, icon, label, tip=""):
+            nonlocal keep
+            if q and q not in label.lower():
+                return
+            item = QListWidgetItem(icon, label)
+            item.setData(Qt.UserRole, (kind, key))
+            item.setToolTip(tip)
+            self.list.addItem(item)
+            if key == self.current:
+                keep = item
+        for pk, r in self.state["requests"].items():
+            add("r", "r:" + pk, tile("list-add-user", "#f59e0b", 34),
+                ("🛟 " if r.get("support") else "") + _("Request: {}").format(r["name"]))
+        for key, inv in self.state["invites"].items():
+            add("i", key, tile("system-users", "#f59e0b", 34), _("Invitation: {}").format(inv["name"]))
+        chats = [("u:" + pk, c) for pk, c in self.state["contacts"].items()] + \
+                [("g:" + cid, g) for cid, g in self.state["groups"].items()]
+        chats.sort(key=lambda kv: (not kv[1].get("official"), -(kv[1]["messages"][-1]["ts"] if kv[1]["messages"] else 0)))
+        for key, c in chats:
+            unread = f"  ({c['unread']})" if c.get("unread") else ""
+            last = c["messages"][-1] if c["messages"] else None
+            preview = (last.get("text") or ("📷" if last.get("image") else "📎")) if last else ""
+            if key[0] == "u":
+                on = self.online.get(key[2:], False)
+                icon = QIcon(avatar_pixmap(c.get("avatar"), c["name"], 34))
+                label = ("🟢 " if on else "") + c["name"] + unread
+            else:
+                icon = tile("system-users", "#0ea5e9" if c.get("official") else "#8b5cf6", 34)
+                label = ("★ " if c.get("official") else "") + c["name"] + unread
+            add(key[0], key, icon, label, preview[:80])
+        if keep:
+            self.list.setCurrentItem(keep)
+        self.list.blockSignals(False)
+        self.update_tray()
+
+    def update_tray(self):
+        n = sum(c.get("unread", 0) for c in list(self.state["contacts"].values()) + list(self.state["groups"].values()))
+        self.tray.setToolTip(f"Nebula Chat — {n}" if n else "Nebula Chat")
+
+    def open_item(self, item, _prev=None):
+        if not item:
+            return
+        kind, key = item.data(Qt.UserRole)
+        self.current = key
+        self.tab_group.button(0).setChecked(True)
+        self.stack.setCurrentIndex(1)
+        self.clear_layout(self.msgs, keep_last=1)
+        self.pinned.hide()
+        if kind in ("r", "i"):
+            info = self.state["requests"][key[2:]] if kind == "r" else self.state["invites"][key]
+            self.peer_avatar.setPixmap(avatar_pixmap(None, info["name"], 20))
+            self.peer_name.setText(info["name"])
+            self.peer_state.setText(_("wants to chat with you") if kind == "r" else _("invites you to a group"))
+            self.request_text.setText(info.get("text") or "")
+            self.request_bar.show()
+            self.bottom_bar.setEnabled(False)
+            return
+        self.request_bar.hide()
+        self.bottom_bar.setEnabled(True)
+        c = self.chat(key)
+        c["unread"] = 0
+        self.peer_name.setText(c["name"])
+        if kind == "u":
+            self.peer_avatar.setPixmap(avatar_pixmap(c.get("avatar"), c["name"], 20))
+            self.update_peer_state()
+            self.send_seen(key[2:])
+        else:
+            self.peer_avatar.setPixmap(tile("system-users", "#0ea5e9" if c.get("official") else "#8b5cf6", 40).pixmap(40, 40))
+            self.update_peer_state()
+            pin = c.get("pinned") or ""
+            if pin:
+                self.pinned.setText("📌 " + pin)
+                self.pinned.show()
+            if self.tox.my_role(key[2:]) == nebula_tox.ROLE_OBSERVER:
+                self.bottom_bar.setEnabled(False)
+        for m in c["messages"][-150:]:
+            self.render_message(m, kind == "g")
+        self.save()
+        self.refresh()
+        self.entry.setFocus()
+
+    def update_peer_state(self):
+        if not self.current:
+            return
+        if self.current[0] == "u":
+            pk = self.current[2:]
+            c = self.contact(pk)
+            if self.typing_now.get(pk):
+                text = _("typing…")
+            elif self.online.get(pk):
+                text = _("online") + (f" · {c['status']}" if c.get("status") else "")
+            else:
+                text = _("offline — messages wait until they are online")
+        else:
+            cid = self.current[2:]
+            n = len(self.peers.get(cid, {})) + 1
+            text = _("{} online").format(n) if self.tox.group_connected(cid) else _("Connecting…")
+        self.peer_state.setText(text)
+
+    # =============== rendering ===============
+    def render_message(self, m, in_group):
+        me = m.get("me")
+        box = QVBoxLayout()
+        box.setSpacing(2)
+        if in_group and not me:
+            who = QLabel(m.get("from", "?"))
+            who.setStyleSheet(f"color: {NAME_COLORS[sum(map(ord, m.get('from', '?'))) % len(NAME_COLORS)]};"
+                              "font-size: 9pt; font-weight: bold;")
+            box.addWidget(who)
+        if m.get("image") and Path(m["image"]).exists():
+            pic = QLabel()
+            pm = QPixmap(m["image"])
+            pic.setPixmap(pm.scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            pic.setCursor(Qt.PointingHandCursor)
+            pic.mousePressEvent = lambda _e, p=m["image"]: subprocess.Popen(["xdg-open", p])
+            box.addWidget(pic)
+        if m.get("file"):
+            fb = QPushButton(QIcon.fromTheme("document-save"), "📎 " + m.get("file_name", "file"))
+            fb.clicked.connect(lambda _c=False, p=m["file"]: subprocess.Popen(["xdg-open", str(Path(p).parent)]))
+            box.addWidget(fb)
+        if m.get("text"):
+            label = QLabel(m["text"])
+            label.setWordWrap(True)
+            label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
+            label.setOpenExternalLinks(True)
+            label.setStyleSheet(BUBBLE[bool(me)])
+            longest = max((label.fontMetrics().horizontalAdvance(x) for x in m["text"].splitlines()), default=0)
+            label.setMinimumWidth(min(440, longest + 30))
+            label.setMaximumWidth(520)
+            box.addWidget(label)
+        meta = when(m.get("ts", 0))
+        if me and not in_group:
+            meta += "  " + ("✓✓" if m.get("seen") else "✓✓" if m.get("delivered") else "✓" if m.get("sent", True)
+                            else "· " + _("waiting"))
+        info = QLabel(meta)
+        info.setStyleSheet(f"color: {ACCENT if m.get('seen') else 'palette(placeholder-text)'}; font-size: 8pt;")
+        box.addWidget(info, 0, Qt.AlignRight if me else Qt.AlignLeft)
+        row = QHBoxLayout()
+        if me:
+            row.addStretch(1)
+        row.addLayout(box)
+        if not me:
+            row.addStretch(1)
+        self.msgs.insertLayout(self.msgs.count() - 1, row)
+        QTimer.singleShot(40, lambda: self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum()))
+
+    def append(self, key, m):
+        c = self.chat(key)
+        c["messages"].append(m)
+        c["messages"] = c["messages"][-2000:]
+        visible = key == self.current and self.isVisible() and self.isActiveWindow() and self.stack.currentIndex() == 1
+        if not m.get("me"):
+            if visible:
+                if key[0] == "u":
+                    self.send_seen(key[2:])
+            else:
+                c["unread"] = c.get("unread", 0) + 1
+                title = c["name"] if key[0] == "u" else f"{c['name']}: {m.get('from', '')}"
+                notify(title, m.get("text") or ("📷" if m.get("image") else "📎"))
+        if key == self.current:
+            self.render_message(m, key[0] == "g")
+        self.save()
+        self.refresh()
+
+    # =============== Tox events ===============
+    def got_nodes(self, nodes):
+        self.tox.bootstrap(nodes if isinstance(nodes, list) and nodes else nebula_tox.FALLBACK_NODES)
+
+    def tick(self):
+        self.timer.setInterval(max(20, min(self.tox.iterate(), 100)))
+
+    def housekeeping(self):
+        self.save()
+        self.write_stats()
+
+    def ev_online(self, on):
+        self.status_text.setText(_("Online — encrypted, peer-to-peer") if on else _("Connecting…"))
+
+    def ev_friend_status(self, pk, on):
+        self.online[pk] = on
+        if on:
+            self.flush(pk)
+            me = self.state["me"]
+            avatar = Path(me["avatar"]).read_bytes() if me.get("avatar") and Path(me["avatar"]).exists() else b""
+            self.tox.send_data(pk, {"t": "profile", "status": me.get("status", ""),
+                                    "avatar": base64.b64encode(avatar).decode()})
+            mine = [pid for pid, p in self.state["posts"].items() if p.get("author") == self.tox.public_key()]
+            self.tox.send_data(pk, {"t": "posts", "ids": mine[-30:]})
+        else:
+            self.contact(pk)["last_seen"] = int(time.time())
+        self.refresh()
+        if self.current == "u:" + pk:
+            self.update_peer_state()
+
+    def ev_request(self, pk, text):
+        if not text.startswith(PREFIX) or pk in self.banned:
+            return                      # not from Nebula Chat, or banned
+        _p, name, msg = (text.split("|", 2) + ["", ""])[:3]
+        self.state["requests"][pk] = {"name": name.strip()[:60] or pk[:8], "text": msg.strip()[:300],
+                                      "support": msg.strip().lower() == "support"}
+        self.save()
+        self.refresh()
+        notify(_("New contact request"), name)
+
+    def ev_message(self, pk, text):
+        if pk in self.banned:
+            return
+        self.typing_now[pk] = False
+        self.append("u:" + pk, {"me": False, "text": text, "ts": int(time.time())})
+
+    def ev_name(self, pk, name):
+        c = self.state["contacts"].get(pk)
+        if c is not None and name and not c.get("renamed") and not c.get("support"):
+            c["name"] = name[:60]
+
+    def ev_typing(self, pk, on):
+        self.typing_now[pk] = on
+        if self.current == "u:" + pk:
+            self.update_peer_state()
+
+    def ev_receipt(self, pk, mid):
+        for m in reversed(self.contact(pk)["messages"][-100:]):
+            if m.get("me") and m.get("mid") == mid:
+                m["delivered"] = True
+                break
+        if self.current == "u:" + pk:
+            self.reopen()
+
+    def ev_data(self, pk, d):
+        if pk in self.banned or not isinstance(d, dict):
+            return
+        t, c = d.get("t"), self.state["contacts"].get(pk)
+        if c is None:
+            return
+        if t == "profile":
+            c["status"] = str(d.get("status", ""))[:140]
+            raw = base64.b64decode(d.get("avatar") or "")
+            if raw and len(raw) < 400_000:
+                c["avatar"] = store_media(raw, ".jpg")
+            self.refresh()
+        elif t == "seen":
+            for m in c["messages"]:
+                if m.get("me") and m.get("ts", 0) <= d.get("ts", 0):
+                    m["seen"] = True
+            if self.current == "u:" + pk:
+                self.reopen()
+        elif t in ("img", "file"):
+            raw = base64.b64decode(d.get("b64") or "")
+            if raw:
+                m = {"me": False, "ts": int(time.time()), "text": str(d.get("caption", ""))[:2000]}
+                if t == "img":
+                    m["image"] = store_media(raw, ".jpg")
+                else:
+                    name = Path(str(d.get("name", "file"))).name[:120] or "file"
+                    folder = Path.home() / "Downloads/Nebula Chat"
+                    folder.mkdir(parents=True, exist_ok=True)
+                    path = folder / name
+                    if path.exists():
+                        path = folder / f"{int(time.time())}-{name}"
+                    path.write_bytes(raw)
+                    m.update(file=str(path), file_name=name)
+                self.append("u:" + pk, m)
+        elif t == "posts":
+            want = [i for i in d.get("ids", [])[:30] if isinstance(i, str) and i not in self.state["posts"]]
+            if want:
+                self.tox.send_data(pk, {"t": "want", "ids": want})
+        elif t == "want":
+            for pid in d.get("ids", [])[:30]:
+                p = self.state["posts"].get(pid)
+                if p and p.get("author") == self.tox.public_key():
+                    img = Path(p["image"]).read_bytes() if p.get("image") and Path(p["image"]).exists() else b""
+                    self.tox.send_data(pk, {"t": "post", "id": pid, "text": p.get("text", ""), "ts": p["ts"],
+                                            "image": base64.b64encode(img).decode()})
+        elif t == "post":
+            pid = str(d.get("id", ""))[:40]
+            if pid and pid not in self.state["posts"]:
+                raw = base64.b64decode(d.get("image") or "")
+                self.state["posts"][pid] = {"author": pk, "name": c["name"], "text": str(d.get("text", ""))[:3000],
+                                            "ts": int(d.get("ts", time.time())), "likes": [],
+                                            "image": store_media(raw, ".jpg") if raw else ""}
+                self.save()
+                if self.stack.currentIndex() == 2:
+                    self.render_feed()
+                notify(_("New post"), c["name"])
+        elif t == "like":
+            p = self.state["posts"].get(str(d.get("id", "")))
+            if p and p.get("author") == self.tox.public_key():
+                likes = set(p.get("likes", []))
+                likes.add(pk) if d.get("on") else likes.discard(pk)
+                p["likes"] = sorted(likes)
+                self.save()
+                if self.stack.currentIndex() == 2:
+                    self.render_feed()
+
+    # ----- groups -----
+    def ev_group_ready(self, cid):
+        g = self.group(cid)
+        g["name"] = self.tox.group_name(cid) or g["name"]
+        if g.get("official"):
+            self.say_hello(cid)
+        self.refresh()
+
+    def ev_group_peer(self, cid, peer, pk, name, joined):
+        peers = self.peers.setdefault(cid, {})
+        if joined:
+            peers[peer] = {"pk": pk, "name": name}
+            if pk in self.banned and self.tox.my_role(cid) <= nebula_tox.ROLE_MODERATOR:
+                self.tox.kick(cid, peer)
+            if self.state["groups"].get(cid, {}).get("official"):
+                self.say_hello(cid)
+        else:
+            peers.pop(peer, None)
+        if self.current == "g:" + cid:
+            self.update_peer_state()
+
+    def ev_group_message(self, cid, peer, pk, name, text):
+        if pk in self.banned:
+            return
+        self.peers.setdefault(cid, {})[peer] = {"pk": pk, "name": name}
+        self.append("g:" + cid, {"me": False, "from": name, "from_pk": pk, "text": text, "ts": int(time.time())})
+
+    def ev_group_data(self, cid, peer, pk, name, d):
+        if pk in self.banned or not isinstance(d, dict):
+            return
+        t = d.get("t")
+        if t == "img":
+            raw = base64.b64decode(d.get("b64") or "")
+            if raw:
+                self.append("g:" + cid, {"me": False, "from": name, "from_pk": pk, "ts": int(time.time()),
+                                         "image": store_media(raw, ".jpg"), "text": str(d.get("caption", ""))[:2000]})
+        elif t == "hello":
+            stats = self.state.setdefault("community", {})
+            stats[pk] = {"name": name[:60], "v": str(d.get("v", ""))[:16], "mode": str(d.get("mode", ""))[:16],
+                         "lang": str(d.get("lang", ""))[:8], "seen": int(time.time())}
+        elif t == "vote":
+            votes = self.state.setdefault("poll_results", {}).setdefault(str(d.get("poll", ""))[:40], {})
+            votes[pk] = str(d.get("option", ""))[:80]
+        elif t == "pin":
+            g = self.group(cid)
+            if self.peer_is_mod(cid, peer):
+                g["pinned"] = str(d.get("text", ""))[:500]
+                if self.current == "g:" + cid:
+                    self.reopen()
+
+    def ev_group_invite(self, friend_pk, invite, name):
+        if friend_pk in self.banned:
+            return
+        key = "i:" + hashlib.sha1(invite).hexdigest()[:16]
+        self.state["invites"][key] = {"name": name or _("Group"), "from": friend_pk,
+                                      "invite": base64.b64encode(invite).decode(),
+                                      "text": _("{} invites you").format(self.contact(friend_pk)["name"])}
+        self.save()
+        self.refresh()
+        notify(_("Group invitation"), name)
+
+    def peer_is_mod(self, cid, peer):
+        members = self.tox.members(cid, [peer])
+        return bool(members) and members[0][3] <= nebula_tox.ROLE_MODERATOR
+
+    def say_hello(self, cid):
+        try:
+            version = Path("/usr/share/nebulaos/VERSION").read_text().strip()
+        except OSError:
+            version = "?"
+        conf = Path.home() / ".config/nebulaos"
+        read = lambda n: (conf / n).read_text().strip() if (conf / n).exists() else ""  # noqa: E731
+        self.tox.group_send_data(cid, {"t": "hello", "v": version, "mode": read("mode"), "lang": read("lang") or "en"})
+        for poll, option in self.state["votes"].items():
+            self.tox.group_send_data(cid, {"t": "vote", "poll": poll, "option": option})
+
+    def join_official(self):
+        mine = self.tox.groups()
+        for g in self.channel.get("groups", []):
+            cid = str(g.get("chat_id", "")).upper()
+            if not is_valid_id(cid, nebula_tox.CHAT_ID_SIZE):
+                continue
+            if cid not in mine:
+                try:
+                    self.tox.join_group(cid)
+                except ValueError:
+                    continue
+            grp = self.group(cid)
+            grp.update(official=True, name=g.get("name") or grp["name"])
+            if g.get("pinned"):
+                grp["pinned"] = g["pinned"]
+        for cid in mine:
+            self.group(cid)
+        self.save()
+        self.refresh()
+
+    def write_stats(self):
+        """For the admin panel: community peers, poll results."""
+        data = {"community": self.state.get("community", {}), "poll_results": self.state.get("poll_results", {}),
+                "updated": int(time.time())}
+        try:
+            STATS.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        except OSError:
+            pass
+
+    # =============== actions ===============
+    def reopen(self):
+        item = self.list.currentItem()
+        if item:
+            self.open_item(item)
+
+    def on_typing(self, _text):
+        if self.current and self.current[0] == "u":
+            self.tox.typing(self.current[2:], True)
+            self.typing_off.start(3000)
+
+    def send_seen(self, pk):
+        if self.online.get(pk):
+            self.tox.send_data(pk, {"t": "seen", "ts": int(time.time())})
+
+    def flush(self, pk):
+        for m in self.contact(pk)["messages"]:
+            if m.get("me") and not m.get("sent", True) and m.get("text"):
+                mid = self.tox.send(pk, m["text"])
+                if mid is not None:
+                    m.update(sent=True, mid=mid)
+        self.save()
+
+    def send(self):
+        text = self.entry.text().strip()
+        if not text or not self.current or self.current[0] not in "ug":
+            return
+        self.entry.clear()
+        m = {"me": True, "text": text, "ts": int(time.time())}
+        if self.current[0] == "u":
+            self.typing_off.stop()
+            self.tox.typing(self.current[2:], False)
+            mid = self.tox.send(self.current[2:], text)
+            m.update(sent=mid is not None, mid=mid)
+        else:
+            m["sent"] = self.tox.group_send(self.current[2:], text)
+            if not m["sent"]:
+                QMessageBox.information(self, "Nebula Chat", _("The group is still connecting. Try again in a moment."))
+                return
+        self.append(self.current, m)
+
+    def attach(self):
+        if not self.current or self.current[0] not in "ug":
+            return
+        path, _f = QFileDialog.getOpenFileName(self, _("Photo or file"), str(Path.home()))
+        if not path:
+            return
+        is_img = Path(path).suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
+        caption = self.entry.text().strip()
+        self.entry.clear()
+        if is_img:
+            raw = jpeg(path, 1600)
+            data = {"t": "img", "b64": base64.b64encode(raw).decode(), "caption": caption}
+            m = {"me": True, "ts": int(time.time()), "image": store_media(raw, ".jpg"), "text": caption}
+        else:
+            if self.current[0] == "g":
+                QMessageBox.information(self, "Nebula Chat", _("In groups you can send photos; files go to private chats."))
+                return
+            raw = Path(path).read_bytes()
+            if len(raw) > 8 * 1024 * 1024:
+                QMessageBox.information(self, "Nebula Chat", _("Files up to 8 MB."))
+                return
+            data = {"t": "file", "name": Path(path).name, "b64": base64.b64encode(raw).decode()}
+            m = {"me": True, "ts": int(time.time()), "file": path, "file_name": Path(path).name}
+        key = self.current
+        if key[0] == "u":
+            if not self.online.get(key[2:]):
+                QMessageBox.information(self, "Nebula Chat", _("Photos and files are sent while the contact is online."))
+                return
+            self.tox.send_data(key[2:], data)
+        else:
+            self.tox.group_send_data(key[2:], data)
+        self.append(key, m)
+
+    def accept_current(self):
+        key = self.current or ""
+        if key.startswith("r:"):
+            pk = key[2:]
+            r = self.state["requests"].pop(pk, None)
+            if r:
+                self.tox.accept(pk)
+                c = self.contact(pk, r["name"])
+                c["support_request"] = r.get("support", False)
+                if r["text"] and r["text"] != "support":
+                    c["messages"].append({"me": False, "text": r["text"], "ts": int(time.time())})
+                self.current = "u:" + pk
+        elif key.startswith("i:"):
+            inv = self.state["invites"].pop(key, None)
+            if inv:
+                try:
+                    cid = self.tox.accept_invite(inv["from"], base64.b64decode(inv["invite"]))
+                    self.group(cid)["name"] = inv["name"]
+                    self.current = "g:" + cid
+                except ValueError as e:
+                    QMessageBox.warning(self, "Nebula Chat", str(e))
+        self.save()
+        self.refresh()
+        self.reopen()
+
+    def decline_current(self):
+        key = self.current or ""
+        self.state["requests"].pop(key[2:], None)
+        self.state["invites"].pop(key, None)
+        self.current = None
+        self.save()
+        self.refresh()
+        self.stack.setCurrentIndex(0)
+
+    def ask_id(self, title, label, size, preset=""):
+        dlg = QDialog(self)
+        dlg.setWindowTitle(title)
+        v = QVBoxLayout(dlg)
+        v.addWidget(QLabel(label))
+        idf = QLineEdit(preset)
+        idf.setMinimumWidth(560)
+        v.addWidget(idf)
+        clip = QGuiApplication.clipboard().text().strip()
+        if not preset and is_valid_id(clip, size):
+            idf.setText(clip)
+        namef = QLineEdit()
+        if size == nebula_tox.ADDRESS_SIZE:
+            v.addWidget(QLabel(_("Name:")))
+            v.addWidget(namef)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        v.addWidget(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return None, None
+        value = idf.text().strip().upper()
+        if not is_valid_id(value, size):
+            QMessageBox.warning(self, "Nebula Chat", _("This is not a Nebula ID.") if size == nebula_tox.ADDRESS_SIZE
+                                else _("This is not a group code."))
+            return None, None
+        return value, namef.text().strip()
+
+    def add_contact(self):
+        nid, name = self.ask_id(_("Add contact"), _("Their Nebula ID (they find it in Nebula Chat → My ID):"),
+                                nebula_tox.ADDRESS_SIZE)
+        if not nid:
+            return
+        if nid == self.tox.address():
+            QMessageBox.information(self, "Nebula Chat", _("This is your own ID."))
+            return
+        try:
+            pk = self.tox.add(nid, f"{PREFIX}{self.tox.name}|{_('Hi! Let us chat in Nebula Chat.')}")
+        except ValueError as e:
+            QMessageBox.warning(self, "Nebula Chat", str(e))
+            return
+        c = self.contact(pk, name or pk[:8])
+        if name:
+            c["renamed"] = True
+        self.current = "u:" + pk
+        self.save()
+        self.refresh()
+        self.reopen()
+
+    def new_group(self):
+        name, ok = QInputDialog.getText(self, _("New group"), _("Group name:"))
+        if not ok or not name.strip():
+            return
+        try:
+            cid = self.tox.create_group(name.strip())
+        except ValueError as e:
+            QMessageBox.warning(self, "Nebula Chat", str(e))
+            return
+        self.group(cid)["name"] = name.strip()
+        self.current = "g:" + cid
+        self.save()
+        self.refresh()
+        self.reopen()
+        QMessageBox.information(self, _("New group"), _("You are the owner. Invite contacts from the ⋮ menu, "
+                                                        "or share the group code."))
+
+    def join_group(self):
+        cid, _n = self.ask_id(_("Join a group by code"), _("Group code:"), nebula_tox.CHAT_ID_SIZE)
+        if not cid:
+            return
+        try:
+            self.tox.join_group(cid)
+        except ValueError as e:
+            QMessageBox.warning(self, "Nebula Chat", str(e))
+            return
+        self.group(cid)
+        self.current = "g:" + cid
+        self.save()
+        self.refresh()
+        self.reopen()
+
+    def open_support(self):
+        sid = str(self.channel.get("support_id", "")).upper()
+        if not is_valid_id(sid):
+            QMessageBox.information(self, "Nebula Chat", _("Support is not available yet. Try again later "
+                                                           "(the support address comes with NebulaOS news)."))
+            return
+        pk = sid[:64]
+        if pk not in self.state["contacts"]:
+            try:
+                self.tox.add(sid, f"{PREFIX}{self.tox.name}|support")
+            except ValueError as e:
+                QMessageBox.warning(self, "Nebula Chat", str(e))
+                return
+            c = self.contact(pk, SUPPORT_NAME)
+            c.update(support=True, renamed=True)
+            c["messages"].append({"me": False, "ts": int(time.time()),
+                                  "text": _("Hi! Write your question here. We answer when we are online — "
+                                            "your message waits and is delivered automatically.")})
+        self.current = "u:" + pk
+        self.save()
+        self.refresh()
+        self.reopen()
+
+    def copy_my_id(self):
+        QGuiApplication.clipboard().setText(self.tox.address())
+        self.status_text.setText(_("Your Nebula ID is copied"))
+
+    def edit_profile(self):
+        me = self.state["me"]
+        dlg = QDialog(self)
+        dlg.setWindowTitle(_("My profile"))
+        v = QVBoxLayout(dlg)
+        pic = QLabel()
+        pic.setAlignment(Qt.AlignCenter)
+        chosen = {"avatar": me.get("avatar")}
+        pic.setPixmap(avatar_pixmap(chosen["avatar"], self.tox.name, 48))
+        v.addWidget(pic)
+        change = QPushButton(_("Change photo…"))
+
+        def pick():
+            path, _f = QFileDialog.getOpenFileName(dlg, _("Photo"), str(Path.home()), "Images (*.png *.jpg *.jpeg *.webp)")
+            if path:
+                raw = square_avatar(path)
+                if raw:
+                    chosen["avatar"] = store_media(raw, ".jpg")
+                    pic.setPixmap(avatar_pixmap(chosen["avatar"], self.tox.name, 48))
+        change.clicked.connect(pick)
+        v.addWidget(change)
+        v.addWidget(QLabel(_("Name:")))
+        name = QLineEdit(self.tox.name)
+        v.addWidget(name)
+        v.addWidget(QLabel(_("Status:")))
+        status = QLineEdit(me.get("status", ""))
+        status.setPlaceholderText(_("For example: playing, at work, available"))
+        v.addWidget(status)
+        v.addWidget(QLabel(_("My Nebula ID:")))
+        nid = QLineEdit(self.tox.address())
+        nid.setReadOnly(True)
+        nid.setMinimumWidth(560)
+        v.addWidget(nid)
+        bb = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        v.addWidget(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        self.tox.set_name(name.text().strip()[:60] or my_name())
+        me.update(name=self.tox.name, status=status.text().strip()[:140], avatar=chosen["avatar"])
+        self.tox.set_status(me["status"])
+        self.tox.save()
+        self.save()
+        self.update_me()
+        for pk, on in self.online.items():
+            if on:
+                self.ev_friend_status(pk, True)
+
+    def chat_menu(self, item, pos):
+        key = item.data(Qt.UserRole)[1] if item else self.current
+        if not key or key[0] not in "ug":
+            return
+        menu = QMenu(self)
+        acts = {}
+        if key[0] == "u":
+            acts[menu.addAction(_("Rename"))] = "rename"
+            acts[menu.addAction(_("Clear history"))] = "clear"
+            acts[menu.addAction(_("Remove contact"))] = "remove"
+        else:
+            cid = key[2:]
+            acts[menu.addAction(QIcon.fromTheme("list-add-user"), _("Invite a contact"))] = "invite"
+            acts[menu.addAction(QIcon.fromTheme("edit-copy"), _("Copy group code"))] = "code"
+            acts[menu.addAction(QIcon.fromTheme("system-users"), _("Members"))] = "members"
+            if self.tox.my_role(cid) <= nebula_tox.ROLE_MODERATOR:
+                acts[menu.addAction(QIcon.fromTheme("pin"), _("Pin a message"))] = "pin"
+            acts[menu.addAction(_("Clear history"))] = "clear"
+            if not self.state["groups"].get(cid, {}).get("official"):
+                acts[menu.addAction(QIcon.fromTheme("application-exit"), _("Leave group"))] = "leave"
+        where = self.list.mapToGlobal(pos) if pos is not None else self.cursor().pos()
+        act = acts.get(menu.exec(where))
+        if not act:
+            return
+        c = self.chat(key)
+        if act == "rename":
+            name, ok = QInputDialog.getText(self, _("Rename"), _("Name:"), text=c["name"])
+            if ok and name.strip():
+                c.update(name=name.strip(), renamed=True)
+        elif act == "clear":
+            c["messages"] = []
+        elif act == "remove":
+            if QMessageBox.question(self, "Nebula Chat", _("Remove {}?").format(c["name"])) != QMessageBox.Yes:
+                return
+            self.tox.remove(key[2:])
+            self.state["contacts"].pop(key[2:], None)
+            self.current = None
+        elif act == "leave":
+            if QMessageBox.question(self, "Nebula Chat", _("Leave {}?").format(c["name"])) != QMessageBox.Yes:
+                return
+            self.tox.leave_group(key[2:])
+            self.state["groups"].pop(key[2:], None)
+            self.current = None
+        elif act == "code":
+            QGuiApplication.clipboard().setText(key[2:])
+            self.status_text.setText(_("Group code copied"))
+        elif act == "invite":
+            names = {c2["name"]: pk for pk, c2 in self.state["contacts"].items() if self.online.get(pk)}
+            if not names:
+                QMessageBox.information(self, "Nebula Chat", _("None of your contacts is online right now."))
+                return
+            who, ok = QInputDialog.getItem(self, _("Invite a contact"), _("Contact:"), sorted(names), 0, False)
+            if ok and self.tox.invite(key[2:], names[who]):
+                self.status_text.setText(_("Invitation sent"))
+        elif act == "pin":
+            text, ok = QInputDialog.getText(self, _("Pin a message"), _("Text:"), text=c.get("pinned", ""))
+            if ok:
+                c["pinned"] = text.strip()
+                self.tox.group_send_data(key[2:], {"t": "pin", "text": text.strip()})
+        elif act == "members":
+            self.members_dialog(key[2:])
+        self.save()
+        self.refresh()
+        if self.current:
+            self.reopen()
+        else:
+            self.stack.setCurrentIndex(0)
+
+    def members_dialog(self, cid):
+        roles = {nebula_tox.ROLE_FOUNDER: _("owner"), nebula_tox.ROLE_MODERATOR: _("moderator"),
+                 nebula_tox.ROLE_USER: _("member"), nebula_tox.ROLE_OBSERVER: _("read only")}
+        mine = self.tox.my_role(cid)
+        dlg = QDialog(self)
+        dlg.setWindowTitle(_("Members"))
+        v = QVBoxLayout(dlg)
+        v.addWidget(QLabel(f"{self.tox.name} — {roles.get(mine, '')} ({_('you')})"))
+        for peer, pk, name, role in self.tox.members(cid, list(self.peers.get(cid, {}))):
+            row = QHBoxLayout()
+            row.addWidget(QLabel(f"{name} — {roles.get(role, '')}"), 1)
+            if mine == nebula_tox.ROLE_FOUNDER and role != nebula_tox.ROLE_FOUNDER:
+                mod = QPushButton(_("Remove moderator") if role == nebula_tox.ROLE_MODERATOR else _("Make moderator"))
+                mod.clicked.connect(lambda _c=False, p=peer, r=role: (self.tox.set_role(
+                    cid, p, nebula_tox.ROLE_USER if r == nebula_tox.ROLE_MODERATOR else nebula_tox.ROLE_MODERATOR),
+                    dlg.accept()))
+                row.addWidget(mod)
+            if mine <= nebula_tox.ROLE_MODERATOR and role > mine:
+                mute = QPushButton(_("Unmute") if role == nebula_tox.ROLE_OBSERVER else _("Mute"))
+                mute.clicked.connect(lambda _c=False, p=peer, r=role: (self.tox.set_role(
+                    cid, p, nebula_tox.ROLE_USER if r == nebula_tox.ROLE_OBSERVER else nebula_tox.ROLE_OBSERVER),
+                    dlg.accept()))
+                kick = QPushButton(_("Kick"))
+                kick.clicked.connect(lambda _c=False, p=peer: (self.tox.kick(cid, p), dlg.accept()))
+                row.addWidget(mute)
+                row.addWidget(kick)
+            v.addLayout(row)
+        if not self.peers.get(cid):
+            v.addWidget(QLabel(_("Nobody else is online in this group right now.")))
+        bb = QDialogButtonBox(QDialogButtonBox.Close)
+        bb.rejected.connect(dlg.reject)
+        v.addWidget(bb)
+        dlg.exec()
+
+    # =============== feed ===============
+    def render_feed(self):
+        self.clear_layout(self.feed)
+        compose = QFrame()
+        compose.setObjectName("group")
+        cv = QVBoxLayout(compose)
+        cv.setContentsMargins(14, 12, 14, 12)
+        text = QPlainTextEdit()
+        text.setPlaceholderText(_("What is new? Your contacts see your posts."))
+        text.setFixedHeight(70)
+        cv.addWidget(text)
+        row = QHBoxLayout()
+        chosen = {"image": ""}
+        photo = QPushButton(QIcon.fromTheme("insert-image"), _("Photo"))
+        hint = QLabel()
+        hint.setStyleSheet("color: palette(placeholder-text);")
+
+        def pick():
+            path, _f = QFileDialog.getOpenFileName(self, _("Photo"), str(Path.home()), "Images (*.png *.jpg *.jpeg *.webp)")
+            if path:
+                chosen["image"] = path
+                hint.setText(Path(path).name)
+        photo.clicked.connect(pick)
+        post = QPushButton(_("Publish"))
+        post.setDefault(True)
+        post.clicked.connect(lambda: self.publish_post(text.toPlainText().strip(), chosen["image"]))
+        row.addWidget(photo)
+        row.addWidget(hint, 1)
+        row.addWidget(post)
+        cv.addLayout(row)
+        self.feed.addWidget(compose)
+
+        for poll in self.channel.get("polls", []):
+            self.feed.addWidget(self.poll_card(poll))
+        posts = sorted(self.state["posts"].items(), key=lambda kv: -kv[1].get("ts", 0))[:80]
+        for pid, p in posts:
+            if p.get("author") not in self.banned:
+                self.feed.addWidget(self.post_card(pid, p))
+        if not posts:
+            empty = QLabel(_("No posts yet. Posts of your contacts appear here when they are online."))
+            empty.setWordWrap(True)
+            empty.setStyleSheet("color: palette(placeholder-text);")
+            self.feed.addWidget(empty)
+        self.feed.addStretch(1)
+
+    def poll_card(self, poll):
+        card = QFrame()
+        card.setObjectName("group")
+        v = QVBoxLayout(card)
+        v.setContentsMargins(14, 12, 14, 12)
+        q = QLabel("📊 " + str(poll.get("question", "")))
+        f = q.font()
+        f.setBold(True)
+        q.setFont(f)
+        q.setWordWrap(True)
+        v.addWidget(q)
+        pid = str(poll.get("id", ""))
+        voted = self.state["votes"].get(pid)
+        row = QHBoxLayout()
+        for opt in poll.get("options", [])[:6]:
+            b = QPushButton(("✓ " if voted == opt else "") + str(opt))
+            b.setEnabled(voted is None)
+            b.clicked.connect(lambda _c=False, o=opt: self.vote(pid, o))
+            row.addWidget(b)
+        v.addLayout(row)
+        sub = QLabel(_("Poll from NebulaOS"))
+        sub.setStyleSheet("color: palette(placeholder-text); font-size: 8pt;")
+        v.addWidget(sub)
+        return card
+
+    def vote(self, pid, option):
+        self.state["votes"][pid] = option
+        for cid, g in self.state["groups"].items():
+            if g.get("official"):
+                self.tox.group_send_data(cid, {"t": "vote", "poll": pid, "option": option})
+        self.save()
+        self.render_feed()
+
+    def post_card(self, pid, p):
+        card = QFrame()
+        card.setObjectName("group")
+        v = QVBoxLayout(card)
+        v.setContentsMargins(14, 12, 14, 12)
+        head = QHBoxLayout()
+        mine = p.get("author") == self.tox.public_key()
+        author = self.state["contacts"].get(p.get("author"), {})
+        av = QLabel()
+        av.setPixmap(avatar_pixmap(self.state["me"].get("avatar") if mine else author.get("avatar"),
+                                   p.get("name", "?"), 18))
+        head.addWidget(av)
+        who = QLabel(f"<b>{p.get('name', '?')}</b>  <span style='color: gray'>{when(p.get('ts', 0))}</span>")
+        head.addWidget(who, 1)
+        if mine:
+            rm = QToolButton()
+            rm.setIcon(QIcon.fromTheme("edit-delete"))
+            rm.setAutoRaise(True)
+            rm.clicked.connect(lambda: (self.state["posts"].pop(pid, None), self.save(), self.render_feed()))
+            head.addWidget(rm)
+        v.addLayout(head)
+        if p.get("text"):
+            t = QLabel(p["text"])
+            t.setWordWrap(True)
+            t.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            v.addWidget(t)
+        if p.get("image") and Path(p["image"]).exists():
+            pic = QLabel()
+            pic.setPixmap(QPixmap(p["image"]).scaled(560, 420, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            v.addWidget(pic)
+        likes = p.get("likes", [])
+        liked = p.get("liked")
+        heart = QPushButton(("❤️ " if liked or (mine and likes) else "🤍 ") + str(len(likes) if mine else ""))
+        heart.setFlat(True)
+        if not mine:
+            heart.clicked.connect(lambda: self.like(pid))
+        v.addWidget(heart, 0, Qt.AlignLeft)
+        return card
+
+    def publish_post(self, text, image):
+        if not text and not image:
+            return
+        raw = jpeg(image, 1280) if image else b""
+        pid = hashlib.sha1(f"{self.tox.public_key()}{time.time()}".encode()).hexdigest()[:20]
+        self.state["posts"][pid] = {"author": self.tox.public_key(), "name": self.tox.name, "text": text[:3000],
+                                    "ts": int(time.time()), "likes": [], "image": store_media(raw, ".jpg") if raw else ""}
+        self.save()
+        for pk, on in self.online.items():
+            if on:
+                self.tox.send_data(pk, {"t": "posts", "ids": [pid]})
+        self.render_feed()
+
+    def like(self, pid):
+        p = self.state["posts"].get(pid)
+        if not p:
+            return
+        p["liked"] = not p.get("liked")
+        if self.online.get(p["author"]):
+            self.tox.send_data(p["author"], {"t": "like", "id": pid, "on": p["liked"]})
+        self.save()
+        self.render_feed()
+
+    # =============== window ===============
+    def bring_up(self):
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def closeEvent(self, event):
+        event.ignore()          # keep running in the tray so messages still arrive
+        self.hide()
+
+    def quit(self):
+        self.save()
+        self.write_stats()
+        self.tox.close()
+        QGuiApplication.quit()
+
+    def command(self, line):
+        """Local commands from the admin panel (same user only)."""
+        cmd, _sp, arg = line.partition(" ")
+        if cmd == "show":
+            self.bring_up()
+            return "ok"
+        if cmd == "create-group" and arg.strip():
+            cid = self.tox.create_group(arg.strip()[:48])
+            self.group(cid).update(name=arg.strip(), official=True)
+            self.save()
+            self.refresh()
+            return cid
+        if cmd == "id":
+            return self.tox.address()
+        return "?"
+
+
+def main():
+    key = f"nebula-chat-{os.getuid()}"
+    if "--print-id" in sys.argv or "--create-group" in sys.argv:
+        from PySide6.QtCore import QCoreApplication
+        QCoreApplication(sys.argv)
+        sock = QLocalSocket()
+        sock.connectToServer(key)
+        if sock.waitForConnected(500):
+            line = "id" if "--print-id" in sys.argv else "create-group " + sys.argv[sys.argv.index("--create-group") + 1]
+            sock.write(line.encode() + b"\n")
+            sock.waitForBytesWritten(500)
+            sock.waitForReadyRead(5000)
+            print(bytes(sock.readAll()).decode().strip())
+            return 0
+        if "--create-group" in sys.argv:
+            print("Open Nebula Chat first.", file=sys.stderr)
+            return 1
+        t = nebula_tox.Tox(PROFILE, my_name())
+        print(t.address())
+        t.close()
+        return 0
+    a = app("nebula-chat", "nebula-chat")
+    a.setQuitOnLastWindowClosed(False)
+    sock = QLocalSocket()
+    sock.connectToServer(key)
+    if sock.waitForConnected(300):
+        sock.write(b"show\n")
+        sock.waitForBytesWritten(300)
+        return 0
+    QLocalServer.removeServer(key)
+    server = QLocalServer()
+    server.setSocketOptions(QLocalServer.UserAccessOption)
+    server.listen(key)
+    try:
+        state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
+        tox = nebula_tox.Tox(PROFILE, state.get("me", {}).get("name") or my_name())
+    except RuntimeError as e:
+        QMessageBox.critical(None, "Nebula Chat", str(e))
+        return 1
+    w = Chat(tox)
+
+    def on_conn():
+        conn = server.nextPendingConnection()
+
+        def ready():
+            for raw in bytes(conn.readAll()).decode(errors="replace").splitlines():
+                try:
+                    reply = w.command(raw.strip())
+                except ValueError as e:
+                    reply = f"error: {e}"
+                conn.write(reply.encode() + b"\n")
+                conn.flush()
+        conn.readyRead.connect(ready)
+    server.newConnection.connect(on_conn)
+    if "--tray" not in sys.argv:
+        w.show()
+    a.aboutToQuit.connect(lambda: (w.save(), w.write_stats(), tox.tox and tox.close()))
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

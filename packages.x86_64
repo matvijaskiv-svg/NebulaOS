@@ -1,0 +1,37 @@
+# NebulaOS Live: дополнительные пакеты. build.sh объединяет этот список со
+# списком releng (mkinitcpio-archiso, syslinux, grub, edk2-shell и т.д.).
+# Всё оформление и программы NebulaOS тянет за собой пакет nebulaos-desktop.
+base
+linux
+linux-firmware
+nebulaos-desktop
+networkmanager
+sudo
+git
+vim
+man-db
+man-pages
+# Рабочий стол и экран входа
+sddm
+xorg-server
+plymouth
+polkit
+firefox
+qt5-wayland
+qt6-wayland
+# Звук
+pipewire
+pipewire-alsa
+pipewire-pulse
+wireplumber
+# AI-ассистент
+ollama
+# Установщик
+arch-install-scripts
+gptfdisk
+btrfs-progs
+dosfstools
+grub
+efibootmgr
+os-prober
+ntfs-3g

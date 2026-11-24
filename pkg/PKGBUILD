@@ -1,0 +1,47 @@
+# Maintainer: NebulaOS
+# Package with all NebulaOS files. Built by build.sh / tools/publish-repo.sh,
+# which put the project's desktop/ folder next to this PKGBUILD.
+pkgname=nebulaos-desktop
+pkgver=0.6.0
+pkgrel=1
+pkgdesc='NebulaOS desktop (KDE Plasma): gaming/hacking/server modes, locked styling, settings, updates'
+arch=('any')
+url='https://github.com/nebulaos/nebulaos'
+license=('MIT')
+depends=(
+  plasma-desktop plasma-nm plasma-pa powerdevil bluedevil kscreen kdeplasma-addons
+  plasma-workspace breeze breeze-gtk kde-gtk-config xdg-desktop-portal-kde kwin
+  konsole dolphin ark spectacle kdialog plasma-systemmonitor qt6-tools qt6-svg
+  pyside6 cups print-manager system-config-printer
+  okular gwenview kate kcalc haruna elisa filelight partitionmanager kdeconnect
+  libreoffice-fresh kdegraphics-thumbnailers ffmpegthumbs plasma-browser-integration
+  thunderbird gimp kolourpaint kclock kweather kamoso
+  libnotify playerctl wl-clipboard xdg-user-dirs btop pciutils pacman-contrib
+  bluez bluez-utils power-profiles-daemon flatpak rsync xdg-utils
+  python
+  papirus-icon-theme capitaine-cursors
+  inter-font noto-fonts noto-fonts-emoji ttf-jetbrains-mono-nerd ttf-ubuntu-font-family ttf-nerd-fonts-symbols
+  zram-generator fastfetch toxcore
+)
+optdepends=(
+  'ollama: local AI assistant'
+  'snapper: system snapshots'
+  'snap-pac: snapshots before and after updates'
+  'grub-btrfs: boot snapshots from the GRUB menu'
+  'plymouth: boot splash'
+  'sddm: NebulaOS login screen'
+  'ufw: firewall for Server mode'
+  'docker: practice labs and ready-made servers'
+  'firejail: sandbox for the private browser'
+  'tor: anonymity network (Hacking mode)'
+)
+backup=(etc/nebulaos/assistant.conf etc/nebulaos/default-mode)
+install=nebulaos-desktop.install
+
+package() {
+  cp -a "$startdir/desktop/." "$pkgdir/"
+  chmod 0755 "$pkgdir"/usr/bin/*
+  printf '%s\n' "$pkgver" > "$pkgdir/usr/share/nebulaos/VERSION"
+  install -d "$pkgdir/etc/systemd/user/timers.target.wants"
+  ln -sf /usr/lib/systemd/user/nebula-update-check.timer "$pkgdir/etc/systemd/user/timers.target.wants/"
+}

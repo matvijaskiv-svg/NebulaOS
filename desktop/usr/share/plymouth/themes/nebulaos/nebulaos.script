@@ -1,0 +1,59 @@
+# NebulaOS Plymouth: softly pulsing logo and a progress bar.
+Window.SetBackgroundTopColor(0.027, 0.024, 0.051);
+Window.SetBackgroundBottomColor(0.071, 0.047, 0.122);
+
+cx = Window.GetX() + Window.GetWidth() / 2;
+cy = Window.GetY() + Window.GetHeight() / 2;
+
+logo.image = Image("logo.png");
+logo.sprite = Sprite(logo.image);
+logo.sprite.SetX(cx - logo.image.GetWidth() / 2);
+logo.sprite.SetY(cy - logo.image.GetHeight() / 2 - 40);
+
+bar_bg.image = Image("bar_bg.png");
+bar_bg.sprite = Sprite(bar_bg.image);
+bar_bg.sprite.SetX(cx - bar_bg.image.GetWidth() / 2);
+bar_bg.sprite.SetY(cy + 110);
+
+bar.original = Image("bar.png");
+bar.sprite = Sprite();
+bar.sprite.SetX(cx - bar.original.GetWidth() / 2);
+bar.sprite.SetY(cy + 110);
+
+tick = 0;
+fun refresh_callback() {
+    tick++;
+    logo.sprite.SetOpacity(0.82 + 0.18 * Math.Sin(tick / 24));
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+fun progress_callback(duration, progress) {
+    w = Math.Int(bar.original.GetWidth() * progress);
+    if (w < 1) w = 1;
+    bar.sprite.SetImage(bar.original.Scale(w, bar.original.GetHeight()));
+}
+Plymouth.SetBootProgressFunction(progress_callback);
+
+# Password prompt (for example for an encrypted disk).
+fun display_password_callback(prompt, bullets) {
+    text = prompt + "  ";
+    for (i = 0; i < bullets; i++) text = text + "•";
+    pw.image = Image.Text(text, 0.95, 0.93, 1.0);
+    pw.sprite = Sprite(pw.image);
+    pw.sprite.SetX(cx - pw.image.GetWidth() / 2);
+    pw.sprite.SetY(cy + 150);
+}
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+fun display_normal_callback() {
+    pw.sprite = Sprite();
+}
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+
+fun message_callback(text) {
+    msg.image = Image.Text(text, 0.7, 0.66, 0.8);
+    msg.sprite = Sprite(msg.image);
+    msg.sprite.SetX(cx - msg.image.GetWidth() / 2);
+    msg.sprite.SetY(Window.GetY() + Window.GetHeight() - 60);
+}
+Plymouth.SetMessageFunction(message_callback);

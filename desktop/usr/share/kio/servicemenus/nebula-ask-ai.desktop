@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Service
+MimeType=text/plain;application/json;application/x-shellscript;text/x-python;text/x-log;application/xml;
+Actions=askNebula
+X-KDE-Priority=TopLevel
+
+[Desktop Action askNebula]
+Name=Ask Nebula AI about this file
+Name[ru]=Спросить Nebula AI об этом файле
+Name[uk]=Запитати Nebula AI про цей файл
+Name[it]=Chiedi a Nebula AI di questo file
+Icon=nebula-assistant
+Exec=nebula term -e bash -c 'head -c 12000 "$0" | ai --stdin "Explain this file briefly: what it is and anything wrong with it."; echo; read -rp "Enter…" _' %f

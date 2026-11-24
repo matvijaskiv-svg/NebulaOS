@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=NebulaOS startup sound
+Exec=sh -c 'command -v pw-play >/dev/null && pw-play --volume 0.6 /usr/share/nebulaos/sounds/startup.wav'
+X-KDE-autostart-phase=2
+NoDisplay=true

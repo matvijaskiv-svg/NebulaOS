@@ -1,0 +1,16 @@
+[Desktop Entry]
+Name=Nebula AI
+Comment=Local AI assistant
+Name[ru]=Nebula AI
+Comment[ru]=Локальный AI-ассистент
+Name[uk]=Nebula AI
+Comment[uk]=Локальний AI-асистент
+Name[it]=Nebula AI
+Comment[it]=Assistente IA locale
+Exec=nebula-ai-overlay
+X-KDE-Shortcuts=Meta+A
+Icon=nebula-assistant
+Terminal=false
+Type=Application
+Categories=Utility;
+StartupWMClass=org.nebulaos.Assistant

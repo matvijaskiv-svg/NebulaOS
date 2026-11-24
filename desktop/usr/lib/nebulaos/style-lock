@@ -1,0 +1,16 @@
+#!/bin/bash
+# NebulaOS style lock: the appearance pages of KDE (themes, colors, icons, fonts,
+# window decorations…) are not installed. The design is set by the mode only.
+# Prints NoExtract lines with --noextract (used by the ISO build and the installer).
+list=/usr/share/nebulaos/style-lock.list
+[[ -r $list ]] || list=$(dirname "$0")/../../share/nebulaos/style-lock.list
+if [[ ${1:-} == --noextract ]]; then
+  printf 'NoExtract ='
+  while read -r m; do [[ $m ]] && printf ' usr/lib/qt6/plugins/plasma/kcms/*/kcm_%s.so usr/share/applications/kcm_%s.desktop' "$m" "$m"; done < "$list"
+  echo
+  exit 0
+fi
+while read -r m; do
+  [[ $m ]] || continue
+  rm -f /usr/lib/qt6/plugins/plasma/kcms/*/"kcm_$m.so" "/usr/share/applications/kcm_$m.desktop"
+done < "$list"

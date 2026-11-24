@@ -1,0 +1,57 @@
+# NebulaOS defaults and lockdown (KDE Kiosk). [$i] = users cannot override.
+
+[KDE]
+LookAndFeelPackage=org.nebulaos.desktop
+AnimationDurationFactor=0.85
+widgetStyle=Breeze
+SingleClick=false
+
+[General]
+ColorScheme=NebulaGaming
+font=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+menuFont=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+smallestReadableFont=Inter,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+toolBarFont=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+fixed=JetBrainsMono Nerd Font,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+
+[WM]
+activeFont=Inter,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1
+
+[Icons][$i]
+Theme=Papirus-Dark
+
+# The look can't be changed: these Settings pages are hidden and locked.
+[KDE Control Module Restrictions][$i]
+kcm_lookandfeel=false
+kcm_colors=false
+kcm_style=false
+kcm_desktoptheme=false
+kcm_icons=false
+kcm_cursortheme=false
+kcm_fonts=false
+kcm_splashscreen=false
+kcm_kwindecoration=false
+kcm_kwin_effects=false
+kcm_kwin_scripts=false
+kcm_kwinxwayland=false
+kcm_sddm=false
+kcm_gtk=false
+kcm_plymouth=false
+kcm_kwintabbox=false
+kcm_lookandfeel.desktop=false
+kcm_colors.desktop=false
+kcm_style.desktop=false
+kcm_desktoptheme.desktop=false
+kcm_icons.desktop=false
+kcm_cursortheme.desktop=false
+kcm_fonts.desktop=false
+kcm_splashscreen.desktop=false
+kcm_kwindecoration.desktop=false
+kcm_kwin_effects.desktop=false
+
+# Panels and the desktop stay locked (no "Edit mode", no extra widgets).
+[KDE Action Restrictions][$i]
+plasma/plasmashell/unlockedDesktop=false
+plasma/allow_configure_when_locked=false
+plasma-desktop/add_activities=false
+ghns=false

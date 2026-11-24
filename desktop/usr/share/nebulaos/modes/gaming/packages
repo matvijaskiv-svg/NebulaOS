@@ -1,0 +1,13 @@
+# Needs the [multilib] repository (nebula mode gaming --install offers to enable it).
+steam
+lutris
+wine-staging
+gamemode
+lib32-gamemode
+mangohud
+lib32-mangohud
+gamescope
+linux-zen
+linux-zen-headers
+obs-studio
+discord

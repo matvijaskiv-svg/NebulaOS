@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_dir=/var/lib/nebulaos
+log_file=/var/log/nebulaos-firstboot.log
+install -d -o root -g root -m 0755 "$state_dir"
+
+{
+  printf '%s\n' 'NebulaOS hardware summary'
+  printf 'Date: %s\n' "$(date --iso-8601=seconds)"
+  printf '\nGPU:\n'
+  if command -v lspci >/dev/null 2>&1; then
+    lspci -nn | grep -Ei 'VGA|3D|Display' || printf '%s\n' 'No GPU listed by lspci.'
+  else
+    printf '%s\n' 'lspci is unavailable.'
+  fi
+  printf '\nNetwork devices:\n'
+  ip -brief link 2>/dev/null || true
+  printf '\n'
+  printf '%s\n' 'No drivers were installed automatically. Review hardware and install the appropriate signed distribution packages.'
+} | tee "$log_file"
+
+touch "$state_dir/firstboot.done"

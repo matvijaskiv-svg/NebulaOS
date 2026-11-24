@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=NebulaOS installer on boot
+Exec=sh -c 'grep -q nebula.install=1 /proc/cmdline && exec nebula-install-gui'
+X-KDE-autostart-phase=2
+NoDisplay=true

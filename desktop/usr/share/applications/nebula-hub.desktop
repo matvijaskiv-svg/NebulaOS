@@ -1,0 +1,17 @@
+[Desktop Entry]
+Name=NebulaOS Settings
+Comment=Mode, wallpaper, language, updates, drivers and system tools
+Name[ru]=Настройки NebulaOS
+Comment[ru]=Режим, обои, язык, обновления, драйверы и система
+Name[uk]=Налаштування NebulaOS
+Comment[uk]=Режим, шпалери, мова, оновлення, драйвери та система
+Name[it]=Impostazioni NebulaOS
+Comment[it]=Modalità, sfondo, lingua, aggiornamenti, driver e sistema
+Exec=nebula-hub
+X-KDE-Shortcuts=Meta+H
+Icon=nebula-settings
+Terminal=false
+Type=Application
+Categories=Settings;System;
+Keywords=settings;preferences;mode;nebula;
+StartupWMClass=org.nebulaos.Hub

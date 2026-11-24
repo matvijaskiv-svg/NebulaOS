@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+"""NebulaOS AI assistant (local Ollama) that can act on the system — with your consent.
+
+The model may propose shell commands in ```run blocks. Nothing runs by itself:
+every command is shown first and runs only after you confirm it. The command's
+output goes back to the model so it can continue (up to a few steps).
+
+    ai "question"              ask once (proposed commands are offered to run)
+    ai                         interactive chat
+    cmd 2>&1 | ai --stdin "?"  explain some output
+    ai --set-style "..."       remember a preferred answer style
+
+The GUI (nebula-ai-overlay) imports this file and uses the same functions.
+"""
+
+import configparser
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+SYSTEM_PROMPT = """You are Nebula, the built-in assistant of NebulaOS (Arch Linux, Hyprland).
+You help the user with their own computer, software development and authorized learning labs.
+Do not help compromise third-party systems.
+
+You can act on the system: when an action is needed, put exactly one shell command per block:
+```run
+<command>
+```
+Rules for commands:
+- Explain in one sentence what each command does before the block.
+- The user confirms every command; you only see its output afterwards. Never claim it already ran.
+- Prefer the NebulaOS tools below, then standard Arch tools (pacman, systemctl, nmcli...).
+- Use sudo only when needed. Never propose destructive commands (rm -rf on system or home
+  paths, mkfs, dd to disks, wipefs, chmod -R 777 /, fork bombs). Prefer safe, reversible steps.
+- After seeing command output, continue or summarise. Stop proposing commands once done.
+
+NebulaOS commands:
+  nebula mode gaming|hacking|server [--install]   switch mode (install its apps)
+  nebula settings wallpaper <file|default> / dock bottom|left|right
+  nebula lang en|ru|uk|it            interface language
+  nebula update                      update NebulaOS and Arch (snapshots before/after)
+  nebula drivers                     install graphics drivers
+  nebula snapshot list|create        system snapshots
+  nebula power power-saver|balanced|performance
+  nebula nightlight | dnd | record | search
+  nebula game mangohud on|off ; nebula tor on|off ; nebula privacy mac on|off
+  nebula server status|enable ssh|docker|cockpit|web|db|firewall
+  nebula template deploy files|media|minecraft ; nebula lab start dvwa|juice-shop|webgoat
+  nebula backup set <dir>|run|auto on|off ; nebula automode on|off
+"""
+
+DANGEROUS = re.compile(
+    r"\brm\s+-[a-zA-Z]*[rf][a-zA-Z]*\s+(/|~|\$HOME|/home|/etc|/usr|/boot|\*)"
+    r"|\bmkfs|\bwipefs|\bdd\s+.*of=/dev/|\bsgdisk|\bparted\b|:\(\)\s*\{|chmod\s+-R\s+777\s+/"
+    r"|>\s*/dev/sd|\bshred\b|\bsystemctl\s+(disable|mask)\s+(sddm|NetworkManager)",
+)
+RUN_BLOCK = re.compile(r"```run\s*\n(.*?)```", re.S)
+MAX_STEPS = 5
+
+
+def load_preferences():
+    config = configparser.ConfigParser(interpolation=None)
+    for path in (Path("/etc/nebulaos/assistant.conf"), Path.home() / ".config/nebulaos/assistant.conf"):
+        if path.is_file():
+            try:
+                config.read_string("[assistant]\n" + path.read_text(encoding="utf-8"))
+            except (OSError, configparser.Error) as error:
+                raise SystemExit(f"ai: cannot read {path}: {error}")
+    return config["assistant"] if config.has_section("assistant") else {}
+
+
+def system_context():
+    """Short facts about this computer so answers fit it."""
+    def out(*cmd):
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True, timeout=3).stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+    gpu = out("sh", "-c", "lspci 2>/dev/null | grep -Ei 'vga|3d|display' | cut -d: -f3 | head -2")
+    facts = [
+        f"NebulaOS {out('cat', '/usr/share/nebulaos/VERSION') or '?'}, kernel {os.uname().release}",
+        f"mode: {out('nebula', 'mode', '--current') or '?'}, language: {out('nebula', 'lang') or 'en'}",
+        f"live session: {'yes' if Path('/run/archiso').exists() else 'no'}",
+        f"GPU: {' / '.join(l.strip() for l in gpu.splitlines()) or 'unknown'}",
+    ]
+    return "Current system: " + "; ".join(facts)
+
+
+def new_conversation():
+    prefs = load_preferences()
+    style = prefs.get("style", "Friendly, concise, patient; answer in the user's language.")
+    return [{"role": "system", "content": f"{SYSTEM_PROMPT}\n{system_context()}\nStyle preference: {style}"}]
+
+
+def chat(messages):
+    """Send the conversation to Ollama and return the reply text (raises RuntimeError)."""
+    prefs = load_preferences()
+    model = os.environ.get("NEBULA_AI_MODEL") or prefs.get("model", "").strip()
+    if not model:
+        raise RuntimeError("No model selected. Pick one in NebulaOS Settings → Assistant, or: ollama pull qwen2.5:7b "
+                           "and set model= in ~/.config/nebulaos/assistant.conf")
+    payload = {"model": model, "stream": False, "messages": messages}
+    request = urllib.request.Request(
+        os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/") + "/api/chat",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=300) as response:
+            return json.load(response)["message"]["content"]
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError) as error:
+        raise RuntimeError(f"Ollama request failed: {error}") from error
+
+
+def commands_in(text):
+    return [c.strip() for c in RUN_BLOCK.findall(text) if c.strip()]
+
+
+def is_dangerous(cmd):
+    return bool(DANGEROUS.search(cmd))
+
+
+def needs_terminal(cmd):
+    """sudo needs a password prompt; dangerous commands get an extra look in a terminal."""
+    return bool(re.search(r"\bsudo\b|\bpacman\s+-S", cmd)) or is_dangerous(cmd)
+
+
+def run_captured(cmd, timeout=120):
+    try:
+        p = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=timeout)
+        out = (p.stdout + p.stderr)[-6000:]
+        return p.returncode, out
+    except subprocess.TimeoutExpired:
+        return 124, f"(stopped after {timeout} s)"
+
+
+def feedback(cmd, code, out):
+    return {"role": "user", "content": f"Output of `{cmd}` (exit code {code}):\n```\n{out or '(no output)'}\n```"}
+
+
+# ---------- Terminal UI ----------
+def converse(messages, question):
+    """One user turn with the confirm-and-run loop in the terminal."""
+    messages.append({"role": "user", "content": question})
+    for _step in range(MAX_STEPS):
+        try:
+            reply = chat(messages)
+        except RuntimeError as error:
+            print(f"ai: {error}", file=sys.stderr)
+            return 1
+        messages.append({"role": "assistant", "content": reply})
+        print(reply)
+        cmds = commands_in(reply)
+        if not cmds or not sys.stdin.isatty():
+            return 0
+        ran = False
+        for cmd in cmds:
+            warn = "  ⚠ potentially destructive!" if is_dangerous(cmd) else ""
+            try:
+                answer = input(f"\n\033[1mRun\033[0m `{cmd}`?{warn} [y/N] ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return 0
+            if answer not in ("y", "yes", "д", "да", "т", "так", "s", "si", "sì"):
+                messages.append({"role": "user", "content": f"I chose not to run `{cmd}`."})
+                continue
+            if needs_terminal(cmd):
+                code = subprocess.call(["bash", "-c", cmd])
+                out = "(ran interactively; output was shown to the user)"
+            else:
+                code, out = run_captured(cmd)
+                print(out)
+            messages.append(feedback(cmd, code, out))
+            ran = True
+        if not ran:
+            return 0
+    return 0
+
+
+def main():
+    args = sys.argv[1:]
+    if not args and not sys.stdin.isatty():
+        args = ["--stdin"]
+    if args and args[0] == "--set-style":
+        if len(args) < 2:
+            print('Usage: ai --set-style "style preference"', file=sys.stderr)
+            return 2
+        path = Path.home() / ".config/nebulaos/assistant.conf"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lines = [l for l in path.read_text(encoding="utf-8").splitlines() if not l.startswith("style=")] \
+            if path.exists() else []
+        path.write_text("\n".join(lines + ["style=" + " ".join(args[1:]).replace("\n", " ")]) + "\n", encoding="utf-8")
+        print(f"Saved assistant style preference to {path}")
+        return 0
+    messages = new_conversation()
+    if args and args[0] == "--stdin":
+        context = sys.stdin.read()[-12000:]
+        question = " ".join(args[1:]) or "Explain this output and how to fix the error."
+        messages.append({"role": "user", "content": f"{question}\n\nCommand output:\n```\n{context}\n```"})
+        try:
+            print(chat(messages))
+            return 0
+        except RuntimeError as error:
+            print(f"ai: {error}", file=sys.stderr)
+            return 1
+    if args:
+        return converse(messages, " ".join(args))
+    while True:
+        try:
+            question = input("ai> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if question in ("exit", "quit"):
+            return 0
+        if question:
+            converse(messages, question)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+"""NebulaOS graphical installer (Live), native Qt. Collects answers and runs
+nebula-install --config in a terminal that shows the progress."""
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_i18n import LANGUAGES, current  # noqa: E402
+from nebula_qt import _, Group, app, fit  # noqa: E402
+from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtGui import QFont, QPixmap  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QComboBox, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
+    QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
+)
+
+SHARE = Path("/usr/share/nebulaos")
+
+
+def disks():
+    """Disks except the Live medium and loop/zram."""
+    try:
+        live = subprocess.run(["findmnt", "-no", "SOURCE", "/run/archiso/bootmnt"],
+                              capture_output=True, text=True).stdout.strip()
+        live_disk = subprocess.run(["lsblk", "-no", "PKNAME", live], capture_output=True,
+                                   text=True).stdout.strip() if live else ""
+        data = json.loads(subprocess.run(["lsblk", "-J", "-d", "-b", "-o", "NAME,SIZE,MODEL,TYPE"],
+                                         capture_output=True, text=True).stdout)
+    except (OSError, ValueError):
+        return []
+    out = []
+    for d in data.get("blockdevices", []):
+        if d.get("type") != "disk" or d["name"].startswith(("loop", "zram", "sr")) or d["name"] == live_disk:
+            continue
+        gb = int(d.get("size") or 0) // 1024 ** 3
+        out.append((f"/dev/{d['name']}", f"/dev/{d['name']} — {gb} GB {d.get('model') or ''}".strip()))
+    return out
+
+
+def form_group(title, rows, note=""):
+    g = Group(title, note)
+    form = QFormLayout()
+    form.setContentsMargins(0, 8, 0, 4)
+    form.setHorizontalSpacing(16)
+    form.setVerticalSpacing(10)
+    form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+    form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+    for label, widget in rows:
+        name = QLabel(_(label))
+        name.setFixedWidth(230)          # same label column in every block
+        name.setWordWrap(True)
+        name.setMinimumHeight(32)
+        name.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        widget.setMinimumHeight(32)
+        form.addRow(name, widget)
+    holder = QWidget()
+    holder.setLayout(form)
+    g.widget(holder)
+    return g
+
+
+class Installer(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("Install NebulaOS"))
+        self.disks = disks()
+
+        self.disk = QComboBox()
+        self.disk.addItems([d[1] for d in self.disks] or [_("No disks found")])
+        self.method = QComboBox()
+        self.method.addItems([_("Whole disk (all data will be erased)"), _("Next to Windows (into free space)")])
+        self.hostname = QLineEdit("nebula")
+        self.user = QLineEdit("user")
+        self.pass1 = QLineEdit()
+        self.pass1.setEchoMode(QLineEdit.Password)
+        self.pass2 = QLineEdit()
+        self.pass2.setEchoMode(QLineEdit.Password)
+        self.langs = LANGUAGES
+        self.lang = QComboBox()
+        self.lang.addItems([n for _c, n in LANGUAGES])
+        self.lang.setCurrentIndex([c for c, _n in LANGUAGES].index(current()))
+        self.modes = [("gaming", "Gaming"), ("hacking", "Hacking"), ("server", "Server")]
+        self.mode = QComboBox()
+        self.mode.addItems([_(m[1]) for m in self.modes])
+        self.kernels = [("linux-zen", "linux-zen — for gaming"), ("linux", "linux — standard"),
+                        ("linux-lts", "linux-lts — long-term")]
+        self.kernel = QComboBox()
+        self.kernel.addItems([_(k[1]) for k in self.kernels])
+        tz = subprocess.run(["timedatectl", "show", "-p", "Timezone", "--value"], capture_output=True,
+                            text=True).stdout.strip() if os.path.exists("/usr/bin/timedatectl") else ""
+        self.tz = QLineEdit(tz if tz and tz != "UTC" else "Europe/Moscow")
+
+        body = QWidget()
+        v = QVBoxLayout(body)
+        v.setContentsMargins(28, 20, 28, 20)
+        v.setSpacing(14)
+        head = QHBoxLayout()
+        logo = QLabel()
+        logo.setPixmap(QPixmap(str(SHARE / "logo.png")).scaled(56, 56, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        title = QLabel(_("Install NebulaOS"))
+        f = QFont(title.font())
+        f.setPointSizeF(f.pointSizeF() * 1.6)
+        f.setBold(True)
+        title.setFont(f)
+        head.addWidget(logo)
+        head.addWidget(title, 1)
+        v.addLayout(head)
+        v.addWidget(form_group("Where to install", [("Disk", self.disk), ("Method", self.method)],
+                               "First shrink the Windows partition in Disk Management (20+ GB needed), "
+                               "turn off Fast Startup and save your BitLocker recovery key."))
+        v.addWidget(form_group("User", [("Computer name", self.hostname), ("Username (lowercase latin)", self.user),
+                                        ("Password", self.pass1), ("Repeat password", self.pass2)]))
+        v.addWidget(form_group("System", [("System language", self.lang), ("Default mode", self.mode),
+                                          ("Kernel", self.kernel), ("Time zone", self.tz)]))
+        self.error = QLabel("")
+        self.error.setStyleSheet("color: #f87171;")
+        v.addWidget(self.error)
+        go = QPushButton(_("Install NebulaOS"))
+        go.setDefault(True)
+        go.setMinimumHeight(36)
+        go.clicked.connect(self.on_install)
+        v.addWidget(go)
+        v.addStretch(1)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(body)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(scroll)
+        fit(self, 720, 780)
+
+    def on_install(self):
+        self.error.setText("")
+        if not self.disks:
+            return self.error.setText(_("No suitable disks"))
+        host, user = self.hostname.text().strip(), self.user.text().strip()
+        p1, p2 = self.pass1.text(), self.pass2.text()
+        if not re.fullmatch(r"[A-Za-z0-9-]{1,63}", host):
+            return self.error.setText(_("Computer name: latin letters, digits, hyphen"))
+        if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", user) or user in ("root", "nebula"):
+            return self.error.setText(_("Username: lowercase latin, not root or nebula"))
+        if not p1 or p1 != p2 or "\n" in p1:
+            return self.error.setText(_("Passwords are empty or do not match"))
+        disk = self.disks[self.disk.currentIndex()][0]
+        dual = self.method.currentIndex() == 1
+        text = (_("NebulaOS will be installed into free space on {}. Windows stays.") if dual
+                else _("ALL DATA on {} will be permanently erased.")).format(disk)
+        box = QMessageBox(QMessageBox.Warning, _("Start the installation?"), text, parent=self)
+        ok = box.addButton(_("Install"), QMessageBox.DestructiveRole)
+        box.addButton(_("Cancel"), QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is not ok:
+            return
+        values = {
+            "disk": disk, "method": "2" if dual else "1", "hostname": host, "user": user, "password": p1,
+            "tz": self.tz.text().strip(), "lang": self.langs[self.lang.currentIndex()][0],
+            "mode": self.modes[self.mode.currentIndex()][0],
+            "kernel": self.kernels[self.kernel.currentIndex()][0], "confirm": "INSTALL",
+        }
+        fd, path = tempfile.mkstemp(prefix="nebula-install-", dir=os.environ.get("XDG_RUNTIME_DIR"))
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("".join(f"{k}={v}\n" for k, v in values.items()))
+        done = _("Done. Press Enter to close.")
+        subprocess.Popen(["nebula", "term", "-e", "bash", "-c",
+                          f"sudo nebula-install --config '{path}'; echo; printf '%s' '{done}'; read _"])
+        self.close()
+
+
+def main():
+    a = app("nebula-install", "system-os-installer")
+    w = Installer()
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

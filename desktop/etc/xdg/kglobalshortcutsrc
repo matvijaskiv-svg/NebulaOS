@@ -1,0 +1,29 @@
+[services][nebula-hub.desktop]
+_launch=Meta+H
+
+[services][nebula-ai.desktop]
+_launch=Meta+A
+
+[services][nebula-mode.desktop]
+_launch=Meta+M
+
+[services][nebula-store.desktop]
+_launch=Meta+Shift+A
+
+[services][org.kde.konsole.desktop]
+_launch=Meta+Return	Ctrl+Alt+T
+
+[services][org.kde.dolphin.desktop]
+_launch=Meta+E
+
+[services][org.kde.spectacle.desktop]
+RectangularRegionScreenShot=Meta+Shift+S	Meta+Shift+Print
+RecordRegion=Meta+Shift+R
+
+[kwin]
+Window Close=Meta+Q	Alt+F4,Alt+F4,Close Window
+Window Maximize=Meta+Up,Meta+PgUp,Maximize Window
+Window Minimize=Meta+Down,Meta+PgDown,Minimize Window
+
+[services][nebula-keys.desktop]
+_launch=Meta+/

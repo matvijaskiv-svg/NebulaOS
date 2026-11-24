@@ -1,0 +1,2 @@
+# Live session: user nebula is in wheel, sudo WITH a password (nebula).
+%wheel ALL=(ALL:ALL) ALL

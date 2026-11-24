@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=NebulaOS mode
+Exec=/usr/bin/nebula apply
+X-KDE-autostart-phase=2
+NoDisplay=true

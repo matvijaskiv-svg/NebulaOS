@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+# NebulaOS disk installer (run from the Live session).
+# Layout: GPT, Btrfs with subvolumes @ @home @snapshots @log @cache,
+# Snapper snapshots + rollback from the GRUB menu (grub-btrfs), Plymouth, GRUB theme.
+# Methods: whole disk (data is erased) or next to Windows (dual boot,
+# free space only; Windows and its EFI partition are never formatted).
+set -euo pipefail
+# shellcheck source=/dev/null
+source /usr/lib/nebulaos/i18n.sh
+
+REPO=/opt/nebulaos/repo
+MNT=/mnt
+die() { printf "$(t '\n\033[31mError:\033[0m %s\n')" "$*" >&2; exit 1; }
+say() { printf '\n\033[1;35m==>\033[0m \033[1m%s\033[0m\n' "$*"; }
+# ask <key> <question> [default]: answer from --config or the keyboard.
+declare -A CFG=()
+ask() {
+  local v
+  if [[ -n ${CFG[$1]+x} ]]; then printf '%s' "${CFG[$1]}"; return; fi
+  read -r -p "$2 [${3:-}]: " v; printf '%s' "${v:-${3:-}}"
+}
+
+[[ $EUID -eq 0 ]] || exec sudo -- "$0" "$@"
+
+# The graphical installer passes answers as a key=value file (--config FILE);
+# the file is read as data (never executed) and deleted right away.
+if [[ ${1:-} == --config ]]; then
+  [[ -f ${2:-} ]] || die "settings file not found: ${2:-}"
+  while IFS='=' read -r k v; do
+    [[ $k =~ ^(disk|method|hostname|user|password|tz|lang|mode|kernel|confirm)$ ]] && CFG[$k]=$v
+  done < "$2"
+  rm -f -- "$2"
+fi
+[[ -d /run/archiso ]] || die "$(t 'the installer only runs from the NebulaOS Live session')"
+[[ -d $REPO ]] || die "local repository $REPO is missing"
+mountpoint -q "$MNT" && die "$MNT is already mounted — reboot the Live session"
+
+clear
+printf "$(t '\033[1;35mNebulaOS installer\033[0m %s\n\n')" "$(cat /usr/share/nebulaos/VERSION 2>/dev/null)"
+
+# ---------- Disk ----------
+live_disk=$(lsblk -no PKNAME "$(findmnt -no SOURCE /run/archiso/bootmnt 2>/dev/null)" 2>/dev/null || true)
+say "$(t 'Disks')"
+lsblk -dpno NAME,SIZE,MODEL,TYPE | awk '$NF=="disk"' | grep -v '/dev/loop' || true
+disk=$(ask disk "$(t 'Disk to install to (for example /dev/sda or /dev/nvme0n1)')")
+[[ -b $disk && $(lsblk -dno TYPE "$disk") == disk ]] || die "$disk is not a disk"
+[[ -n $live_disk && $disk == "/dev/$live_disk" ]] && die "$(t 'this is the Live medium you booted from')"
+size_gb=$(( $(lsblk -bdno SIZE "$disk") / 1024 / 1024 / 1024 ))
+(( size_gb >= 20 )) || die "at least 20 GB needed, $disk has ${size_gb} GB"
+
+uefi=0; [[ -d /sys/firmware/efi ]] && uefi=1
+say "$(t 'Installation method')"
+printf "$(t '  1) Whole disk — everything on %s will be erased
+  2) Next to Windows (dual boot) — into free space on the disk
+')" "$disk"
+method=$(ask method "$(t 'Method')" 1)
+dual=0
+if [[ $method == 2 ]]; then
+  dual=1
+  (( uefi )) || die "$(t 'dual boot needs the PC to be booted in UEFI mode')"
+  esp=$(lsblk -lpno NAME,PARTTYPE "$disk" | awk 'tolower($2)=="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"{print $1; exit}')
+  [[ -n $esp ]] || die "no Windows EFI partition on $disk"
+  free_sectors=$(sgdisk -p "$disk" | sed -n 's/^Total free space is \([0-9]*\) sectors.*/\1/p')
+  free_gb=$(( ${free_sectors:-0} * $(blockdev --getss "$disk") / 1024 / 1024 / 1024 ))
+  (( free_gb >= 20 )) || die "$disk has ${free_gb} GB free, at least 20 needed. Shrink Windows: Disk Management → Shrink Volume"
+  cat <<'NOTE'
+
+  Before installing next to Windows:
+   • turn off Fast Startup in Windows (Control Panel → Power Options);
+   • if BitLocker is on, save the recovery key or suspend encryption;
+   • back up important data.
+NOTE
+fi
+
+# ---------- Settings ----------
+say "$(t 'Settings')"
+hostname=$(ask hostname "$(t 'Computer name')" nebula)
+[[ $hostname =~ ^[a-zA-Z0-9-]{1,63}$ ]] || die "$(t 'computer name: latin letters, digits, hyphen')"
+user=$(ask user "$(t 'Username (lowercase latin)')" user)
+[[ $user =~ ^[a-z_][a-z0-9_-]{0,31}$ && $user != root && $user != nebula ]] || die "$(t 'invalid username')"
+while :; do
+  if [[ -n ${CFG[password]:-} ]]; then pass1=${CFG[password]}; pass2=$pass1; unset 'CFG[password]'; break; fi
+  read -r -s -p "$(t 'Password: ')" pass1; echo
+  read -r -s -p "$(t 'Repeat password: ')" pass2; echo
+  [[ -n $pass1 && $pass1 == "$pass2" ]] && break
+  echo 'Passwords are empty or do not match, try again.'
+done
+tz_default=$(timedatectl show -p Timezone --value 2>/dev/null || echo Europe/Moscow)
+[[ $tz_default == UTC ]] && tz_default=Europe/Moscow
+tz=$(ask tz "$(t 'Time zone')" "$tz_default")
+[[ -f /usr/share/zoneinfo/$tz ]] || die "unknown time zone $tz"
+lang=$(ask lang "$(t 'System language (en / ru / uk / it)')" "$(nebula_lang)")
+[[ $lang =~ ^(en|ru|uk|it)$ ]] || die "$(t 'language: en, ru, uk or it')"
+mode=$(ask mode "$(t 'Default mode (gaming / hacking / server)')" gaming)
+[[ $mode =~ ^(gaming|hacking|server)$ ]] || die "$(t 'mode: gaming, hacking or server')"
+kernel=linux; [[ $mode == gaming ]] && kernel=linux-zen
+kernel=$(ask kernel "$(t 'Kernel (linux / linux-zen / linux-lts)')" "$kernel")
+[[ $kernel =~ ^(linux|linux-zen|linux-lts)$ ]] || die "$(t 'kernel: linux, linux-zen or linux-lts')"
+
+ucode=''; grep -q GenuineIntel /proc/cpuinfo && ucode=intel-ucode; grep -q AuthenticAMD /proc/cpuinfo && ucode=amd-ucode
+
+say "$(t 'Please check')"
+if (( dual )); then
+  printf "$(t '  Disk:       %s — NebulaOS into free space (%s GB), Windows stays\n  EFI:        %s (not formatted)\n')" "$disk" "$free_gb" "$esp"
+else
+  printf "$(t '  Disk:       %s (%s GB) — WILL BE COMPLETELY ERASED\n')" "$disk" "$size_gb"
+fi
+printf "$(t '  Boot:       %s\n  Computer:   %s\n  User:       %s (sudo with password, root login disabled)\n  Mode:       %s, kernel %s, time zone %s, language %s\n')" \
+  "$( ((uefi)) && echo UEFI || echo BIOS)" "$hostname" "$user" "$mode" "$kernel" "$tz" "$lang"
+# shellcheck disable=SC2059
+confirm=$(ask confirm "$(printf "$(t 'To start installing to %s, type INSTALL')" "$disk")")
+[[ $confirm == INSTALL ]] || die "$(t 'cancelled, the disk was not touched')"
+
+# ---------- Partitioning ----------
+say "$(t 'Partitioning the disk')"
+part() { [[ $disk =~ [0-9]$ ]] && echo "${disk}p$1" || echo "${disk}$1"; }
+umount -R "$MNT" 2>/dev/null || true
+swapoff -a 2>/dev/null || true
+if (( dual )); then
+  before=$(lsblk -lpno NAME "$disk")
+  # Start 0 and end 0 = the largest free block on the disk.
+  sgdisk -n0:0:0 -t0:8300 -c0:NebulaOS "$disk" >/dev/null
+  partprobe "$disk"; udevadm settle
+  root_part=$(comm -13 <(sort <<< "$before") <(lsblk -lpno NAME "$disk" | sort) | head -1)
+  [[ -b $root_part ]] || die "$(t 'could not create a partition in the free space')"
+  part_gb=$(( $(lsblk -bdno SIZE "$root_part") / 1024 / 1024 / 1024 ))
+  if (( part_gb < 20 )); then
+    sgdisk -d "$(cat /sys/class/block/"${root_part##*/}"/partition)" "$disk" >/dev/null
+    die "the largest free block is ${part_gb} GB, 20 needed. Free up space in one piece"
+  fi
+else
+wipefs -af "$disk" >/dev/null
+sgdisk -Z "$disk" >/dev/null
+if (( uefi )); then
+  sgdisk -n1:0:+1G -t1:ef00 -c1:EFI -n2:0:0 -t2:8300 -c2:NebulaOS "$disk" >/dev/null
+else
+  sgdisk -n1:0:+1M -t1:ef02 -c1:BIOS -n2:0:0 -t2:8300 -c2:NebulaOS "$disk" >/dev/null
+fi
+partprobe "$disk"; udevadm settle
+root_part=$(part 2)
+esp=$(part 1)
+(( uefi )) && mkfs.fat -F32 -n NEBULA_EFI "$esp" >/dev/null
+fi
+mkfs.btrfs -f -L NebulaOS "$root_part" >/dev/null
+
+mount "$root_part" "$MNT"
+for sv in @ @home @snapshots @log @cache; do btrfs subvolume create "$MNT/$sv" >/dev/null; done
+umount "$MNT"
+opts=noatime,compress=zstd:1,space_cache=v2
+mount -o "$opts,subvol=@" "$root_part" "$MNT"
+mkdir -p "$MNT"/{home,.snapshots,var/log,var/cache/pacman/pkg,boot/efi}
+mount -o "$opts,subvol=@home" "$root_part" "$MNT/home"
+mount -o "$opts,subvol=@snapshots" "$root_part" "$MNT/.snapshots"
+mount -o "$opts,subvol=@log" "$root_part" "$MNT/var/log"
+mount -o "$opts,subvol=@cache" "$root_part" "$MNT/var/cache/pacman/pkg"
+(( uefi )) && mount "$esp" "$MNT/boot/efi"
+
+# ---------- Packages ----------
+say "$(t 'Installing packages (needs internet, 10–30 minutes)')"
+conf=$(mktemp)
+cat /etc/pacman.conf > "$conf"
+sed -i "/^\[options\]/a $(/usr/lib/nebulaos/style-lock --noextract)" "$conf"
+printf '\n[nebulaos]\nSigLevel = Optional TrustAll\nServer = file://%s\n' "$REPO" >> "$conf"
+pkgs=(base "$kernel" "$kernel-headers" linux-firmware $ucode btrfs-progs grub grub-btrfs snapper snap-pac
+      inotify-tools networkmanager sudo man-db vim git sddm plymouth nebulaos-desktop ollama firefox
+      pipewire pipewire-alsa pipewire-pulse wireplumber ufw)
+(( uefi )) && pkgs+=(efibootmgr)
+(( dual )) && pkgs+=(os-prober ntfs-3g)
+pacstrap -C "$conf" -K "$MNT" "${pkgs[@]}"
+rm -f "$conf"
+genfstab -U "$MNT" >> "$MNT/etc/fstab"
+# The AI model from the ISO (if any) goes to the installed system too.
+[[ -d /var/lib/ollama/blobs ]] && install -d "$MNT/var/lib/ollama" && cp -a /var/lib/ollama/. "$MNT/var/lib/ollama/"
+
+# ---------- Configuration ----------
+say "$(t 'Configuring the system')"
+printf '%s\n' "$mode" > "$MNT/etc/nebulaos/default-mode"
+printf '%s:%s\n' "$user" "$pass1" > "$MNT/root/.nebula-pass"; chmod 600 "$MNT/root/.nebula-pass"
+unset pass1 pass2
+
+arch-chroot "$MNT" /usr/bin/env HOSTNAME_="$hostname" USER_="$user" TZ_="$tz" DISK_="$disk" UEFI_="$uefi" DUAL_="$dual" LANG_="$lang" bash -euo pipefail <<'CHROOT'
+ln -sf "/usr/share/zoneinfo/$TZ_" /etc/localtime
+# Windows keeps local time in the hardware clock; match it for dual boot so the clock does not drift.
+if [[ $DUAL_ == 1 ]]; then hwclock --systohc --localtime; else hwclock --systohc; fi
+case $LANG_ in ru) LOC_=ru_RU ;; uk) LOC_=uk_UA ;; it) LOC_=it_IT ;; *) LOC_=en_US ;; esac
+sed -i "s/^#\(en_US.UTF-8 UTF-8\)/\1/; s/^#\($LOC_.UTF-8 UTF-8\)/\1/" /etc/locale.gen
+locale-gen >/dev/null
+printf 'LANG=%s.UTF-8\n' "$LOC_" > /etc/locale.conf
+printf 'KEYMAP=us\nFONT=cyr-sun16\n' > /etc/vconsole.conf
+printf '%s\n' "$HOSTNAME_" > /etc/hostname
+printf '127.0.0.1 localhost\n::1 localhost\n127.0.1.1 %s\n' "$HOSTNAME_" > /etc/hosts
+
+useradd -m -G wheel -s /bin/bash "$USER_"
+chpasswd < /root/.nebula-pass && rm -f /root/.nebula-pass
+install -d -o "$USER_" -g "$USER_" "/home/$USER_/.config" "/home/$USER_/.config/nebulaos"
+printf '%s\n' "$LANG_" > "/home/$USER_/.config/nebulaos/lang"
+chown "$USER_:$USER_" "/home/$USER_/.config/nebulaos/lang"
+passwd -l root >/dev/null
+printf '%%wheel ALL=(ALL:ALL) ALL\n' > /etc/sudoers.d/10-wheel && chmod 440 /etc/sudoers.d/10-wheel
+
+# NebulaOS update repository.
+grep -q nebulaos-repo.conf /etc/pacman.conf || printf '\nInclude = /etc/pacman.d/nebulaos-repo.conf\n' >> /etc/pacman.conf
+grep -q '^NoExtract.*kcm_lookandfeel' /etc/pacman.conf || sed -i "/^\[options\]/a $(/usr/lib/nebulaos/style-lock --noextract)" /etc/pacman.conf
+systemctl --global enable nebula-update-check.timer >/dev/null 2>&1 || true
+
+# Boot: Plymouth and the GRUB theme.
+plymouth-set-default-theme nebulaos
+grep -q '^HOOKS=.*plymouth' /etc/mkinitcpio.conf || \
+  sed -Ei 's/^(HOOKS=\([^)]*\<(udev|systemd)\>)/\1 plymouth/' /etc/mkinitcpio.conf
+mkinitcpio -P >/dev/null
+sed -i -e 's/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="NebulaOS"/' \
+       -e 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet splash"/' \
+       -e 's|^#\?GRUB_THEME=.*|GRUB_THEME="/usr/share/grub/themes/nebulaos/theme.txt"|' \
+       -e 's/^#\?GRUB_GFXMODE=.*/GRUB_GFXMODE=auto/' /etc/default/grub
+if [[ $DUAL_ == 1 ]]; then
+  sed -i 's/^#\?GRUB_DISABLE_OS_PROBER=.*/GRUB_DISABLE_OS_PROBER=false/' /etc/default/grub
+  grep -q '^GRUB_DISABLE_OS_PROBER=false' /etc/default/grub || echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub
+  sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=10/' /etc/default/grub
+fi
+grep -q '^GRUB_THEME=' /etc/default/grub || echo 'GRUB_THEME="/usr/share/grub/themes/nebulaos/theme.txt"' >> /etc/default/grub
+if [[ $UEFI_ == 1 ]]; then
+  grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=NebulaOS >/dev/null
+else
+  grub-install --target=i386-pc "$DISK_" >/dev/null
+fi
+
+# Snapshots: Snapper config on top of the separate @snapshots subvolume.
+umount /.snapshots
+rmdir /.snapshots
+snapper --no-dbus -c root create-config /
+btrfs subvolume delete /.snapshots >/dev/null
+mkdir /.snapshots
+mount -a
+chmod 750 /.snapshots
+sed -i -e 's/^TIMELINE_LIMIT_HOURLY=.*/TIMELINE_LIMIT_HOURLY="5"/' -e 's/^TIMELINE_LIMIT_DAILY=.*/TIMELINE_LIMIT_DAILY="7"/' \
+       -e 's/^TIMELINE_LIMIT_WEEKLY=.*/TIMELINE_LIMIT_WEEKLY="0"/' -e 's/^TIMELINE_LIMIT_MONTHLY=.*/TIMELINE_LIMIT_MONTHLY="0"/' \
+       -e 's/^TIMELINE_LIMIT_YEARLY=.*/TIMELINE_LIMIT_YEARLY="0"/' /etc/snapper/configs/root
+grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+
+systemctl enable NetworkManager sddm fstrim.timer snapper-timeline.timer snapper-cleanup.timer \
+  grub-btrfsd nebula-firstboot ollama bluetooth power-profiles-daemon cups.socket >/dev/null 2>&1
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1 || true
+snapper --no-dbus -c root create -d 'Fresh NebulaOS install' || true
+CHROOT
+
+say "$(t 'Done!')"
+umount -R "$MNT"
+(( dual )) && printf "$(t 'Windows will show up in the GRUB boot menu. If it does not, run after login: sudo grub-mkconfig -o /boot/grub/grub.cfg\n')"
+printf "$(t 'NebulaOS is installed on %s. Remove the Live medium and reboot: sudo reboot\n')" "$disk"

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=NebulaOS welcome
+Exec=sh -c 'test -e "${XDG_CONFIG_HOME:-$HOME/.config}/nebulaos/welcome-done" || exec nebula-welcome'
+X-KDE-autostart-phase=2
+NoDisplay=true

@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = filesystem
+Target = nebulaos-desktop
+
+[Action]
+Description = Setting the system name to NebulaOS...
+When = PostTransaction
+Exec = /usr/bin/install -m 0644 /usr/lib/os-release.nebula /etc/os-release

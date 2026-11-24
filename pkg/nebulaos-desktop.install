@@ -1,0 +1,7 @@
+post_install() {
+  echo '==> NebulaOS installed. Switch mode: Super+M, control center: Super+H.'
+}
+post_upgrade() {
+  echo "==> NebulaOS updated: $2 → $1. The new look applies after Super+Ctrl+R or re-login."
+  echo '    What is new: /usr/share/nebulaos/CHANGELOG.md'
+}

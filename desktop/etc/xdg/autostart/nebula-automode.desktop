@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=NebulaOS automatic mode
+Exec=sh -c 'test -e "${XDG_CONFIG_HOME:-$HOME/.config}/nebulaos/automode" && exec nebula-automode'
+X-KDE-autostart-phase=2
+NoDisplay=true

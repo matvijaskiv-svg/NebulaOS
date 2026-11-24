@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""NebulaOS: switch mode automatically by running apps.
+
+Every few seconds checks running programs: a game launcher or game → Gaming,
+Wireshark/Ghidra → Hacking. When they all close, the previous mode returns.
+Enable with `nebula automode on`.
+"""
+import os
+import re
+import subprocess
+import time
+
+RULES = [
+    (re.compile(r"^(steam|steamwebhelper|lutris|heroic|gamescope|wine64?-preloader|.*\.exe)$", re.I), "gaming"),
+    (re.compile(r"^(wireshark|ghidra.*|burpsuite|zenmap)$", re.I), "hacking"),
+]
+
+
+def running():
+    names = set()
+    for pid in os.listdir("/proc"):
+        if pid.isdigit():
+            try:
+                with open(f"/proc/{pid}/comm", encoding="utf-8") as f:
+                    names.add(f.read().strip())
+            except OSError:
+                pass
+    return names
+
+
+def current_mode():
+    return subprocess.run(["nebula", "mode", "--current"], capture_output=True, text=True).stdout.strip()
+
+
+def main():
+    previous = None
+    while True:
+        names = running()
+        wanted = next((mode for pattern, mode in RULES if any(pattern.match(n) for n in names)), None)
+        now = current_mode()
+        if wanted and wanted != now:
+            previous = previous or now
+            subprocess.run(["nebula", "mode", wanted], capture_output=True)
+        elif not wanted and previous:
+            subprocess.run(["nebula", "mode", previous], capture_output=True)
+            previous = None
+        time.sleep(4)
+
+
+if __name__ == "__main__":
+    main()

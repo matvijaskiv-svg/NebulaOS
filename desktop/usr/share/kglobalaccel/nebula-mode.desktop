@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Switch mode
+Name[ru]=Сменить режим
+Name[uk]=Змінити режим
+Name[it]=Cambia modalità
+Exec=nebula mode --menu
+X-KDE-Shortcuts=Meta+M
+Icon=nebula-mode
+Terminal=false
+Type=Application
+NoDisplay=true

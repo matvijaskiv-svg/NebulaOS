@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+"""NebulaOS welcome tour (native Qt): language, mode, drivers, assistant, extras."""
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_i18n import LANGUAGES, current  # noqa: E402
+from nebula_qt import _, Group, Thumb, app, fit, in_terminal, run  # noqa: E402
+from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtGui import QFont, QPixmap  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QButtonGroup, QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QRadioButton,
+    QStackedWidget, QVBoxLayout, QWidget,
+)
+
+SHARE = Path("/usr/share/nebulaos")
+CONF = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "nebulaos"
+MODES = [
+    ("gaming", "Gaming", "Neon look, turbo mode, Steam and MangoHud"),
+    ("hacking", "Hacking", "Catppuccin Mocha, network tools, Tor, practice labs"),
+    ("server", "Server", "Ubuntu-like style, Docker, Cockpit, ready-made servers"),
+]
+
+
+def heading(text, size=1.7):
+    label = QLabel(_(text))
+    f = QFont(label.font())
+    f.setPointSizeF(f.pointSizeF() * size)
+    f.setBold(True)
+    label.setFont(f)
+    label.setAlignment(Qt.AlignCenter)
+    label.setWordWrap(True)
+    return label
+
+
+def muted(text):
+    label = QLabel(_(text))
+    label.setAlignment(Qt.AlignCenter)
+    label.setWordWrap(True)
+    label.setStyleSheet("color: palette(placeholder-text);")
+    return label
+
+
+def has_nvidia():
+    try:
+        return "nvidia" in subprocess.run(["lspci"], capture_output=True, text=True).stdout.lower()
+    except OSError:
+        return False
+
+
+class Welcome(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("Welcome to NebulaOS"))
+        self.stack = QStackedWidget()
+        for page in (self.page_hello(), self.page_mode(), self.page_setup(), self.page_done()):
+            self.stack.addWidget(page)
+
+        self.back = QPushButton(_("Back"))
+        self.back.clicked.connect(lambda: self.go(-1))
+        self.next = QPushButton(_("Next"))
+        self.next.setDefault(True)
+        self.next.setMinimumWidth(120)
+        self.next.clicked.connect(lambda: self.go(1))
+        self.dots = QLabel()
+        self.dots.setAlignment(Qt.AlignCenter)
+        self.dots.setStyleSheet("color: palette(highlight); letter-spacing: 4px;")
+        nav = QHBoxLayout()
+        nav.setContentsMargins(24, 10, 24, 18)
+        nav.addWidget(self.back)
+        nav.addWidget(self.dots, 1)
+        nav.addWidget(self.next)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addWidget(self.stack, 1)
+        lay.addLayout(nav)
+        self.update_nav()
+        fit(self, 820, 600)
+
+    def go(self, step):
+        i = self.stack.currentIndex() + step
+        if i >= self.stack.count():
+            self.close()
+            return
+        self.stack.setCurrentIndex(max(0, i))
+        self.update_nav()
+
+    def update_nav(self):
+        i, n = self.stack.currentIndex(), self.stack.count()
+        self.back.setVisible(i > 0)
+        self.next.setText(_("Get started") if i == n - 1 else _("Next"))
+        self.dots.setText(" ".join("●" if k == i else "○" for k in range(n)))
+
+    def closeEvent(self, event):
+        CONF.mkdir(parents=True, exist_ok=True)
+        (CONF / "welcome-done").touch()
+        super().closeEvent(event)
+
+    def page(self):
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(48, 28, 48, 8)
+        lay.setSpacing(12)
+        return w, lay
+
+    # ---------- Pages ----------
+    def page_hello(self):
+        w, lay = self.page()
+        lay.addStretch(1)
+        logo = QLabel()
+        logo.setPixmap(QPixmap(str(SHARE / "logo.png")).scaled(128, 128, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        logo.setAlignment(Qt.AlignCenter)
+        lay.addWidget(logo)
+        lay.addWidget(heading("Welcome to NebulaOS"))
+        lay.addWidget(muted("Three work modes, a macOS-style desktop and everything at hand.\n"
+                            "Let's set things up in a minute."))
+        lay.addSpacing(14)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        row.addWidget(QLabel(_("Language")))
+        combo = QComboBox()
+        codes = [c for c, _n in LANGUAGES]
+        combo.addItems([n for _c, n in LANGUAGES])
+        combo.setCurrentIndex(codes.index(current()))
+        combo.setMinimumWidth(180)
+
+        def changed(i):
+            if codes[i] != current():
+                run("lang", codes[i])
+                os.execv(sys.argv[0], sys.argv)
+        combo.currentIndexChanged.connect(changed)
+        row.addWidget(combo)
+        row.addStretch(1)
+        lay.addLayout(row)
+        lay.addStretch(2)
+        return w
+
+    def page_mode(self):
+        w, lay = self.page()
+        lay.addWidget(heading("Choose a mode", 1.5))
+        lay.addWidget(muted("You can switch any time with Super+M."))
+        lay.addSpacing(8)
+        cards = QHBoxLayout()
+        cards.setSpacing(12)
+        group = QButtonGroup(w)
+        now = run("mode", "--current")[1]
+        self.cards = []
+        for key, title, desc in MODES:
+            card = QFrame()
+            card.setObjectName("card")
+            v = QVBoxLayout(card)
+            v.setContentsMargins(10, 10, 10, 12)
+            v.addWidget(Thumb(SHARE / "modes" / key / "wallpaper.png", 110))
+            radio = QRadioButton(_(title))
+            f = radio.font()
+            f.setBold(True)
+            radio.setFont(f)
+            radio.setChecked(key == now)
+            group.addButton(radio)
+            v.addWidget(radio)
+            d = QLabel(_(desc))
+            d.setWordWrap(True)
+            d.setStyleSheet("color: palette(placeholder-text);")
+            v.addWidget(d, 1)
+            radio.toggled.connect(lambda on, k=key, c=card: on and self.pick_mode(k, c))
+            self.cards.append(card)
+            cards.addWidget(card, 1)
+        lay.addLayout(cards)
+        lay.addStretch(1)
+        self.mark_cards(self.cards[[k for k, _t, _d in MODES].index(now)] if now in ("gaming", "hacking", "server") else None)
+        return w
+
+    def mark_cards(self, chosen):
+        for c in self.cards:
+            c.setProperty("active", "true" if c is chosen else "false")
+            c.style().unpolish(c)
+            c.style().polish(c)
+
+    def pick_mode(self, key, card):
+        self.mark_cards(card)
+        subprocess.Popen(["nebula", "mode", key])
+
+    def page_setup(self):
+        w, lay = self.page()
+        lay.addWidget(heading("Useful settings", 1.5))
+        lay.addWidget(muted("All of this is also in NebulaOS Settings (Super+H)."))
+        g = Group()
+        nvidia = has_nvidia()
+        g.action("Graphics drivers",
+                 "NVIDIA graphics found — install the driver for full speed" if nvidia else "NVIDIA, AMD or Intel",
+                 "Detect", lambda: in_terminal("nebula", "drivers"), primary=nvidia)
+        g.action("AI assistant", "Download the local qwen2.5 model (~1 GB)", "Download",
+                 lambda: in_terminal("ollama", "pull", "qwen2.5:1.5b"))
+        g.switch("Auto mode", "Launch a game and Gaming mode turns on", False,
+                 lambda on: run("automode", "on" if on else "off"))
+        g.switch("MangoHud in games", "Show FPS on top of games", False,
+                 lambda on: run("game", "mangohud", "on" if on else "off"))
+        g.action("App store", "Apps from Arch and Flathub", "Open", lambda: subprocess.Popen(["nebula-store"]))
+        lay.addWidget(g)
+        lay.addStretch(1)
+        return w
+
+    def page_done(self):
+        w, lay = self.page()
+        lay.addStretch(1)
+        logo = QLabel()
+        logo.setPixmap(QPixmap(str(SHARE / "logo.png")).scaled(72, 72, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        logo.setAlignment(Qt.AlignCenter)
+        lay.addWidget(logo)
+        lay.addWidget(heading("All set!"))
+        keys = QLabel(_("Super — apps menu · Super+H — Settings\nSuper+A — assistant · Super+M — switch mode\n"
+                        "Super+Enter — terminal · Super+L — lock screen"))
+        keys.setAlignment(Qt.AlignCenter)
+        keys.setStyleSheet("color: palette(placeholder-text);")
+        lay.addWidget(keys)
+        lay.addStretch(2)
+        return w
+
+
+def main():
+    a = app("nebula-welcome", "nebulaos")
+    w = Welcome()
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

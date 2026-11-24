@@ -1,0 +1,12 @@
+# Services are not enabled automatically: nebula server enable <name>.
+openssh
+cockpit
+docker
+docker-compose
+nginx
+postgresql
+valkey
+fail2ban
+ufw
+btop
+htop

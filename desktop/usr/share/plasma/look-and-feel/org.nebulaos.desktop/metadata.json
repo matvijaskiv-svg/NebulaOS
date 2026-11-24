@@ -1,0 +1,13 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [{ "Name": "NebulaOS" }],
+        "Category": "",
+        "Description": "NebulaOS desktop: top bar, centered dock, NebulaOS colors",
+        "Id": "org.nebulaos.desktop",
+        "License": "GPL-2.0-or-later",
+        "Name": "NebulaOS",
+        "Version": "0.5"
+    },
+    "X-Plasma-APIVersion": "2"
+}

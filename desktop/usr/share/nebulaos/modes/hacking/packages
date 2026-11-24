@@ -1,0 +1,22 @@
+# Tools for your own labs, CTFs and tests you are authorized to run.
+nmap
+wireshark-qt
+tcpdump
+tor
+torsocks
+firejail
+docker
+openbsd-netcat
+john
+hashcat
+hydra
+sqlmap
+nikto
+gobuster
+aircrack-ng
+metasploit
+binwalk
+rizin
+ghidra
+gdb
+btop

@@ -1,0 +1,8 @@
+[Unit]
+Description=NebulaOS: check for updates and news
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=-/usr/bin/nebula news --notify
+ExecStart=-/usr/bin/nebula update --notify

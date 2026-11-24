@@ -1,0 +1,8 @@
+NAME="NebulaOS"
+PRETTY_NAME="NebulaOS"
+ID=nebulaos
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;139;92;246"
+HOME_URL="https://github.com/nebulaos"
+LOGO=nebulaos

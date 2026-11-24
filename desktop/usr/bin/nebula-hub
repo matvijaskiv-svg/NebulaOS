@@ -1,0 +1,723 @@
+#!/usr/bin/env python3
+"""NebulaOS Settings (Super+H) — one place for the whole system, macOS style.
+
+Sidebar with search and groups; every section shows live information and the
+everyday controls; deeper options open the matching KDE settings module.
+Look-changing actions go through `nebula`; anything needing sudo opens a terminal.
+"""
+import os
+import platform
+import re
+import shutil
+import socket
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_i18n import LANGUAGES, current  # noqa: E402
+from nebula_qt import (  # noqa: E402
+    _, Meter, Page, Thumb, app, background, fit, in_terminal, run, run_cmd, tile,
+)
+from PySide6.QtCore import QSize, Qt  # noqa: E402
+from PySide6.QtGui import QFont, QPixmap  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QListWidgetItem, QMainWindow, QPlainTextEdit, QPushButton, QSlider, QStackedWidget, QStatusBar,
+    QVBoxLayout, QWidget,
+)
+
+SHARE = Path("/usr/share/nebulaos")
+CONF = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "nebulaos"
+LIVE = Path("/run/archiso").exists()
+MODES = [
+    ("gaming", "Gaming", "Neon look, turbo mode, Steam and MangoHud"),
+    ("hacking", "Hacking", "Catppuccin Mocha, network tools, Tor, practice labs"),
+    ("server", "Server", "Ubuntu-like style, Docker, Cockpit, ready-made servers"),
+]
+# macOS-like palette for section tiles.
+BLUE, PURPLE, CYAN, PINK, GREEN, ORANGE, GRAY, INDIGO = (
+    "#0a84ff", "#a855f7", "#32ade6", "#ff375f", "#30d158", "#ff9f0a", "#8e8e93", "#5e5ce6")
+
+
+def out(*cmd, timeout=5):
+    code, text = run_cmd(*cmd, timeout=timeout)
+    return text if code == 0 else ""
+
+
+def kcm(name):
+    """Open a KDE System Settings module (the detailed settings)."""
+    subprocess.Popen(["kcmshell6", name])
+
+
+def human(n):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024:
+            return f"{n:.0f} {unit}" if unit in ("B", "KB") else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} PB"
+
+
+def info_row(grid, row, label, value):
+    grid.setColumnMinimumWidth(0, 130)
+    grid.setColumnStretch(1, 1)
+    k = QLabel(_(label))
+    k.setStyleSheet("color: palette(placeholder-text);")
+    v = QLabel(value)
+    v.setWordWrap(True)
+    v.setTextInteractionFlags(Qt.TextSelectableByMouse)
+    grid.addWidget(k, row, 0, Qt.AlignTop)
+    grid.addWidget(v, row, 1)
+
+
+def usage_row(group, label, used, total):
+    row = QWidget()
+    rv = QVBoxLayout(row)
+    rv.setContentsMargins(0, 6, 0, 6)
+    top = QHBoxLayout()
+    top.addWidget(QLabel(label), 1)
+    amount = QLabel(_("{} of {} used").format(human(used), human(total)) if total else "—")
+    amount.setStyleSheet("color: palette(placeholder-text);")
+    top.addWidget(amount)
+    rv.addLayout(top)
+    rv.addWidget(Meter(used / total if total else 0))
+    group.widget(row)
+
+
+def wallpapers():
+    """All NebulaOS wallpapers: the three mode ones first, then the gallery."""
+    found = [SHARE / "modes" / k / "wallpaper.png" for k, _t, _d in MODES]
+    found += sorted((SHARE / "wallpapers").glob("*.png")) if (SHARE / "wallpapers").exists() else []
+    return [p for p in found if p.exists()]
+
+
+class Settings(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("NebulaOS Settings"))
+        self.setStatusBar(QStatusBar())
+        self.stack = QStackedWidget()
+        self.nav = QListWidget()
+        self.nav.setObjectName("nav")
+        self.nav.setIconSize(QSize(24, 24))
+        self.search = QLineEdit()
+        self.search.setPlaceholderText(_("Search"))
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self.filter)
+
+        sections = [
+            (None, [("Overview", "computer", INDIGO, self.page_overview)]),
+            ("Network", [("Wi-Fi", "network-wireless", "#0a84ff", self.page_wifi),
+                         ("Bluetooth", "bluetooth-active", "#3b5bdb", self.page_bluetooth),
+                         ("Network", "network-wired", "#0891b2", self.page_network)]),
+            ("Look", [("Mode", "view-grid", "#9333ea", self.page_mode),
+                      ("Wallpaper and dock", "preferences-desktop-wallpaper", "#06b6d4", self.page_wallpaper),
+                      ("Displays", "video-display", "#4f46e5", self.page_displays)]),
+            ("Devices", [("Sound", "audio-volume-high", "#ec4899", self.page_sound),
+                         ("Keyboard", "input-keyboard", "#64748b", self.page_keyboard),
+                         ("Mouse and touchpad", "input-mouse", "#78716c", self.page_mouse),
+                         ("Printers", "printer", "#0d9488", self.page_printers),
+                         ("Power", "battery-good", "#16a34a", self.page_power)]),
+            ("System", [("Updates", "software-update-available", "#f97316", self.page_updates),
+                        ("Privacy and security", "security-high", "#dc2626", self.page_privacy),
+                        ("Storage and backups", "drive-harddisk", "#57534e", self.page_storage),
+                        ("Users", "system-users", "#2563eb", self.page_users),
+                        ("Date and time", "preferences-system-time", "#e11d48", self.page_datetime),
+                        ("Language and region", "preferences-desktop-locale", "#0284c7", self.page_language)]),
+            ("NebulaOS", [("Mode features", "applications-games", "#ea580c", self.page_features),
+                          ("Apps", "view-app-grid", "#7c3aed", self.page_apps),
+                          ("Assistant", "tools-wizard", "#c026d3", self.page_ai),
+                          ("About this system", "help-about", "#475569", self.page_about)]),
+        ]
+        if LIVE:
+            sections[0][1].insert(0, ("Install NebulaOS", "system-software-install", GREEN, self.page_install))
+        self.items = []
+        for header, entries in sections:
+            if header:
+                h = QListWidgetItem(_(header).upper())
+                h.setFlags(Qt.NoItemFlags)
+                f = QFont(self.nav.font())
+                f.setPointSizeF(f.pointSizeF() * 0.78)
+                f.setBold(True)
+                f.setLetterSpacing(QFont.AbsoluteSpacing, 0.8)
+                h.setFont(f)
+                h.setForeground(self.palette().placeholderText())
+                h.setSizeHint(QSize(0, 30))
+                self.nav.addItem(h)
+                self.items.append((h, None, header))
+            for title, icon, color, build in entries:
+                item = QListWidgetItem(tile(icon, color), _(title))
+                item.setData(Qt.UserRole, self.stack.count())
+                item.setSizeHint(QSize(0, 36))
+                self.nav.addItem(item)
+                self.items.append((item, title, header))
+                self.stack.addWidget(build())
+        self.nav.currentItemChanged.connect(self.open_item)
+        self.nav.setCurrentRow(0)
+
+        side = QWidget()
+        side.setFixedWidth(240)
+        sv = QVBoxLayout(side)
+        sv.setContentsMargins(10, 12, 0, 6)
+        sv.setSpacing(8)
+        sv.addWidget(self.search)
+        sv.addWidget(self.nav, 1)
+        body = QWidget()
+        lay = QHBoxLayout(body)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(side)
+        line = QFrame()
+        line.setFrameShape(QFrame.VLine)
+        line.setStyleSheet("color: palette(midlight);")
+        lay.addWidget(line)
+        lay.addWidget(self.stack, 1)
+        self.setCentralWidget(body)
+        fit(self, 1000, 680)
+
+    # ---------- Navigation ----------
+    def open_item(self, item, _prev=None):
+        if item is not None and item.data(Qt.UserRole) is not None:
+            self.stack.setCurrentIndex(item.data(Qt.UserRole))
+
+    def filter(self, text):
+        text = text.strip().lower()
+        visible_headers = set()
+        for item, title, header in self.items:
+            if title is None:
+                continue
+            hit = not text or text in _(title).lower() or text in title.lower()
+            item.setHidden(not hit)
+            if hit:
+                visible_headers.add(header)
+        for item, title, header in self.items:
+            if title is None:
+                item.setHidden(bool(text) and header not in visible_headers)
+        for i in range(self.nav.count()):
+            it = self.nav.item(i)
+            if not it.isHidden() and it.data(Qt.UserRole) is not None:
+                self.nav.setCurrentItem(it)
+                break
+
+    def toast(self, text):
+        self.statusBar().showMessage(text[:200], 4000)
+
+    # ---------- Overview ----------
+    def page_overview(self):
+        p = Page("Overview")
+        head = QFrame()
+        head.setObjectName("group")
+        hl = QHBoxLayout(head)
+        hl.setContentsMargins(18, 16, 18, 16)
+        hl.setSpacing(18)
+        logo = QLabel()
+        logo.setPixmap(QPixmap(str(SHARE / "logo.png")).scaled(84, 84, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        hl.addWidget(logo)
+        text = QVBoxLayout()
+        name = QLabel("NebulaOS")
+        f = name.font()
+        f.setPointSizeF(f.pointSizeF() * 1.7)
+        f.setBold(True)
+        name.setFont(f)
+        version = out("cat", str(SHARE / "VERSION")).strip() or "?"
+        mode_now = run("mode", "--current")[1]
+        mode_title = _(dict((k, t) for k, t, _d in MODES).get(mode_now, "Gaming"))
+        sub = QLabel(_("Version {}").format(version) + "  ·  " + _("Mode: {}").format(mode_title))
+        sub.setStyleSheet("color: palette(placeholder-text);")
+        text.addStretch(1)
+        text.addWidget(name)
+        text.addWidget(sub)
+        text.addStretch(1)
+        hl.addLayout(text, 1)
+        p.add(head)
+
+        hw = p.group("This computer")
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(24)
+        grid.setVerticalSpacing(8)
+        cpu = ""
+        try:
+            with open("/proc/cpuinfo", encoding="utf-8") as fh:
+                cpu = next((l.split(":", 1)[1].strip() for l in fh if l.startswith("model name")), "")
+        except OSError:
+            pass
+        gpu = "; ".join(l.split(": ", 1)[-1] for l in out("sh", "-c", "lspci | grep -Ei 'vga|3d|display'").splitlines())
+        info_row(grid, 0, "Name", socket.gethostname())
+        info_row(grid, 1, "Processor", cpu or "—")
+        info_row(grid, 2, "Graphics", gpu or "—")
+        info_row(grid, 3, "Kernel", platform.release())
+        holder = QWidget()
+        holder.setLayout(grid)
+        hw.widget(holder)
+
+        use = p.group("Memory and storage")
+        mem_total = mem_avail = 0
+        try:
+            with open("/proc/meminfo", encoding="ascii") as fh:
+                for l in fh:
+                    if l.startswith("MemTotal"):
+                        mem_total = int(l.split()[1]) * 1024
+                    elif l.startswith("MemAvailable"):
+                        mem_avail = int(l.split()[1]) * 1024
+        except OSError:
+            pass
+        du = shutil.disk_usage("/")
+        usage_row(use, _("Memory"), mem_total - mem_avail, mem_total)
+        usage_row(use, _("Disk"), du.used, du.total)
+
+        quick = p.group("Quick settings")
+        quick.switch("Wi-Fi", "", out("nmcli", "radio", "wifi") == "enabled",
+                     lambda on: run_cmd("nmcli", "radio", "wifi", "on" if on else "off"))
+        quick.switch("Bluetooth", "", "Powered: yes" in out("bluetoothctl", "show"),
+                     lambda on: run_cmd("bluetoothctl", "power", "on" if on else "off"))
+        night = out("kreadconfig6", "--file", "kwinrc", "--group", "NightColor", "--key", "Active") == "true"
+        quick.switch("Night light", "Warmer colors in the evening", night, lambda _on: run("nightlight"))
+        self.power_combo(quick)
+        c = p.group("Maintenance")
+        c.action("System check", "Internet, drivers, sound, disk, services — with fixes", "Check", lambda: in_terminal("nebula", "doctor"), primary=True)
+        c.action("Clean up", "Free disk space safely", "Clean", lambda: in_terminal("nebula", "clean"))
+        return p
+
+    def power_combo(self, group):
+        if not shutil.which("powerprofilesctl"):
+            return
+        profiles = [("power-saver", "Saver"), ("balanced", "Balanced"), ("performance", "Performance")]
+        now = out("powerprofilesctl", "get")
+        idx = next((i for i, (k, _t) in enumerate(profiles) if k == now), 1)
+        group.combo("Power profile", [t for _k, t in profiles], idx,
+                    lambda i: self.toast(run("power", profiles[i][0])[1]))
+
+    # ---------- Network ----------
+    def page_wifi(self):
+        p = Page("Wi-Fi")
+        g = p.group()
+        g.switch("Wi-Fi", "", out("nmcli", "radio", "wifi") == "enabled",
+                 lambda v: run_cmd("nmcli", "radio", "wifi", "on" if v else "off"))
+        active = next((l.split(":", 2)[2] for l in out("nmcli", "-t", "-f", "ACTIVE,SIGNAL,SSID", "dev", "wifi").splitlines()
+                       if l.startswith("yes:")), "")
+        g.action("Connected network", active or _("Not connected"), "Network settings…",
+                 lambda: kcm("kcm_networkmanagement"))
+        nets = p.group("Nearby networks", "Choose a network in Network settings to enter its password.")
+        seen = set()
+        for l in out("nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list", timeout=8).splitlines():
+            parts = l.rsplit(":", 2)
+            if len(parts) == 3 and parts[0] and parts[0] not in seen:
+                seen.add(parts[0])
+                lock = "🔒 " if parts[2] and parts[2] != "--" else ""
+                nets.action(parts[0], f"{lock}{_('Signal')}: {parts[1]}%", "Connect",
+                            lambda s=parts[0]: self.connect_wifi(s))
+            if len(seen) >= 8:
+                break
+        if not seen:
+            nets.widget(QLabel(_("No networks found")))
+        return p
+
+    def connect_wifi(self, ssid):
+        code, text = run_cmd("nmcli", "dev", "wifi", "connect", ssid, timeout=30)
+        if code != 0:
+            kcm("kcm_networkmanagement")      # needs a password: the KDE dialog asks for it
+        self.toast(text)
+
+    def page_bluetooth(self):
+        p = Page("Bluetooth")
+        g = p.group()
+        g.switch("Bluetooth", "", "Powered: yes" in out("bluetoothctl", "show"),
+                 lambda v: run_cmd("bluetoothctl", "power", "on" if v else "off"))
+        g.action("Add a device", "Headphones, mice, keyboards, phones", "Pair…", lambda: kcm("kcm_bluetooth"))
+        devs = p.group("My devices")
+        paired = [l.split(" ", 2)[2] for l in out("bluetoothctl", "devices", "Paired").splitlines() if l.count(" ") >= 2]
+        for d in paired:
+            devs.action(d, "", "Settings…", lambda: kcm("kcm_bluetooth"))
+        if not paired:
+            devs.widget(QLabel(_("No paired devices")))
+        return p
+
+    def page_network(self):
+        p = Page("Network")
+        g = p.group()
+        rows = [l.split(":") for l in out("nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "dev").splitlines()]
+        for dev, typ, state, conn in (r for r in rows if len(r) == 4 and r[1] in ("ethernet", "wifi")):
+            g.action(f"{dev} ({typ})", f"{state} · {conn}" if conn else state, "Settings…",
+                     lambda: kcm("kcm_networkmanagement"))
+        g.action("VPN", "Add WireGuard or OpenVPN connections", "Settings…", lambda: kcm("kcm_networkmanagement"))
+        return p
+
+    # ---------- Look ----------
+    def page_mode(self):
+        p = Page("Work mode", "Look and features change instantly, no re-login needed.")
+        self.mode_cards = {}
+        row = QWidget()
+        cards = QHBoxLayout(row)
+        cards.setContentsMargins(0, 0, 0, 0)
+        cards.setSpacing(12)
+        for key, title, desc in MODES:
+            cards.addWidget(self.mode_card(key, title, desc), 1)
+        p.add(row)
+        self.mark_mode(run("mode", "--current")[1])
+        apps = p.group("Apps", "Install the apps for this mode")
+        for key, title, _d in MODES:
+            apps.action(_(title), "", "Install", lambda k=key: in_terminal("nebula", "mode", k, "--install"))
+        auto = p.group("Automatic mode")
+        auto.switch("Switch mode by app", "Steam and games → Gaming, Wireshark and Ghidra → Hacking",
+                    run("automode", "status")[1] == "on",
+                    lambda on: self.toast(run("automode", "on" if on else "off")[1]))
+        return p
+
+    def mode_card(self, key, title, desc):
+        card = QFrame()
+        card.setObjectName("card")
+        card.setMinimumWidth(150)
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(10, 10, 10, 12)
+        lay.setSpacing(6)
+        lay.addWidget(Thumb(SHARE / "modes" / key / "wallpaper.png", 104))
+        head = QHBoxLayout()
+        name = QLabel(_(title))
+        f = name.font()
+        f.setBold(True)
+        f.setPointSizeF(f.pointSizeF() * 1.1)
+        name.setFont(f)
+        head.addWidget(name, 1)
+        badge = QLabel(_("Active"))
+        badge.setObjectName("badge")
+        head.addWidget(badge)
+        lay.addLayout(head)
+        d = QLabel(_(desc))
+        d.setWordWrap(True)
+        d.setStyleSheet("color: palette(placeholder-text);")
+        d.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        lay.addWidget(d, 1)
+        btn = QPushButton(_("Turn on"))
+        btn.setMinimumHeight(30)
+        btn.clicked.connect(lambda: self.set_mode(key))
+        lay.addWidget(btn)
+        self.mode_cards[key] = (card, badge, btn)
+        return card
+
+    def mark_mode(self, now):
+        for key, (card, badge, btn) in self.mode_cards.items():
+            active = key == now
+            card.setProperty("active", "true" if active else "false")
+            card.style().unpolish(card)
+            card.style().polish(card)
+            badge.setVisible(active)
+            btn.setVisible(not active)
+
+    def set_mode(self, key):
+        self.mark_mode(key)
+        self.toast(_("Mode: {}").format(_(dict((k, t) for k, t, _d in MODES)[key])))
+        background(lambda: run("mode", key), lambda r: None)
+
+    def page_wallpaper(self):
+        p = Page("Wallpaper and dock", "You can change the wallpaper and the dock position. Everything else is set by the mode.")
+        g = p.group("Wallpaper")
+        grid = QGridLayout()
+        grid.setSpacing(10)
+        for i, path in enumerate(wallpapers()):
+            thumb = Thumb(path, 84)
+            thumb.setCursor(Qt.PointingHandCursor)
+            thumb.mousePressEvent = lambda _e, pth=path: self.toast(run("settings", "wallpaper", str(pth))[1])
+            grid.addWidget(thumb, i // 3, i % 3)
+        holder = QWidget()
+        holder.setLayout(grid)
+        g.widget(holder)
+        g.action("Your own picture", "PNG or JPG", "Choose…", self.pick_wallpaper)
+        g.action("Mode wallpaper", "Restore the default", "Reset",
+                 lambda: self.toast(run("settings", "wallpaper", "default")[1]))
+        positions = [("default", "Mode default"), ("bottom", "Bottom"), ("left", "Left"), ("right", "Right")]
+        d = p.group("Dock")
+        d.combo("Dock position", [t for _k, t in positions], 0,
+                lambda i: self.toast(run("settings", "dock", positions[i][0])[1]))
+        return p
+
+    def pick_wallpaper(self):
+        path, _f = QFileDialog.getOpenFileName(self, _("Choose a wallpaper"), str(Path.home()),
+                                               _("Images") + " (*.png *.jpg *.jpeg *.webp)")
+        if path:
+            self.toast(run("settings", "wallpaper", path)[1])
+
+    def page_displays(self):
+        p = Page("Displays")
+        g = p.group()
+        outputs = re.findall(r"Output: \d+ (\S+).*?Modes:.*?(\d+x\d+@\d+)\*", out("kscreen-doctor", "-o"), re.S)
+        for name, mode in outputs:
+            g.action(name, mode.replace("@", " · ") + " Hz", "Arrange…", lambda: kcm("kcm_kscreen"))
+        if not outputs:
+            g.action("Resolution, scale and arrangement", "", "Open", lambda: kcm("kcm_kscreen"))
+        n = p.group("Night light")
+        night = out("kreadconfig6", "--file", "kwinrc", "--group", "NightColor", "--key", "Active") == "true"
+        n.switch("Night light", "Warmer colors in the evening", night, lambda _on: run("nightlight"))
+        n.action("Schedule and color", "", "Settings…", lambda: kcm("kcm_nightlight"))
+        return p
+
+    # ---------- Devices ----------
+    def page_sound(self):
+        p = Page("Sound")
+        g = p.group("Output")
+        sink = re.search(r'node\.description = "([^"]+)"', out("wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"))
+        vol_text = out("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@")
+        vol = re.search(r"Volume: ([0-9.]+)", vol_text)
+        row = QWidget()
+        rl = QHBoxLayout(row)
+        rl.setContentsMargins(0, 8, 0, 8)
+        rl.addWidget(QLabel(_("Volume")))
+        slider = QSlider(Qt.Horizontal)
+        slider.setRange(0, 100)
+        slider.setValue(int(float(vol.group(1)) * 100) if vol else 50)
+        slider.valueChanged.connect(lambda v: run_cmd("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{v}%"))
+        rl.addWidget(slider, 1)
+        g.widget(row)
+        g.switch("Mute", "", "MUTED" in vol_text,
+                 lambda on: run_cmd("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1" if on else "0"))
+        g.action("Output device", sink.group(1) if sink else "—", "Change…", lambda: kcm("kcm_pulseaudio"))
+        i = p.group("Input")
+        i.action("Microphone", "", "Settings…", lambda: kcm("kcm_pulseaudio"))
+        return p
+
+    def page_keyboard(self):
+        p = Page("Keyboard")
+        g = p.group()
+        layouts = out("kreadconfig6", "--file", "kxkbrc", "--group", "Layout", "--key", "LayoutList") or "us"
+        g.action("Layouts", layouts.replace(",", ", ").upper() + " · Alt+Shift", "Settings…", lambda: kcm("kcm_keyboard"))
+        g.action("Shortcuts", "Super — apps menu · Super+H — Settings", "Settings…", lambda: kcm("kcm_keys"))
+        g.action("All NebulaOS shortcuts", "Super+/", "Show", lambda: subprocess.Popen(["nebula", "keys"]))
+        return p
+
+    def page_mouse(self):
+        p = Page("Mouse and touchpad")
+        g = p.group()
+        g.action("Mouse", "Speed, scrolling, buttons", "Settings…", lambda: kcm("kcm_mouse"))
+        g.action("Touchpad", "Tap to click, natural scrolling, gestures", "Settings…", lambda: kcm("kcm_touchpad"))
+        return p
+
+    def page_printers(self):
+        p = Page("Printers")
+        g = p.group()
+        printers = [l.split()[1] for l in out("lpstat", "-p").splitlines() if l.startswith("printer ")]
+        for name in printers:
+            g.action(name, "", "Settings…", lambda: kcm("kcm_printer_manager"))
+        g.action("Add a printer (network or USB)", "", "Add…", lambda: kcm("kcm_printer_manager"), primary=not printers)
+        return p
+
+    def page_power(self):
+        p = Page("Power")
+        g = p.group()
+        root = Path("/sys/class/power_supply")
+        bats = sorted(root.glob("BAT*")) if root.exists() else []
+        if bats:
+            cap = (bats[0] / "capacity").read_text().strip() if (bats[0] / "capacity").exists() else "?"
+            status = (bats[0] / "status").read_text().strip() if (bats[0] / "status").exists() else ""
+            row = QWidget()
+            rv = QVBoxLayout(row)
+            rv.setContentsMargins(0, 6, 0, 6)
+            top = QHBoxLayout()
+            top.addWidget(QLabel(_("Battery")), 1)
+            st = QLabel(f"{cap}% · {_(status)}" if status else f"{cap}%")
+            st.setStyleSheet("color: palette(placeholder-text);")
+            top.addWidget(st)
+            rv.addLayout(top)
+            rv.addWidget(Meter(int(cap) / 100 if cap.isdigit() else 0))
+            g.widget(row)
+        self.power_combo(g)
+        if bats and list(root.glob("BAT*/charge_control_end_threshold")):
+            limit = run("battery", "status")[1]
+            g.switch("Battery care", "Charge only to 80% — the battery lasts years longer", "80" in limit,
+                     lambda on: in_terminal("nebula", "battery", "on" if on else "off"))
+        g.action("Sleep, screen off and lid", "", "Settings…", lambda: kcm("kcm_powerdevilprofilesconfig"))
+        return p
+
+    # ---------- System ----------
+    def page_updates(self):
+        p = Page("Updates", _("Installed: NebulaOS {}").format(run("version")[1].split()[-1]))
+        g = p.group()
+        status = QLabel(_("Checking…"))
+        g.widget(status)
+        g.action("Update the system", "NebulaOS and all apps; snapshots are taken before and after", "Update",
+                 lambda: in_terminal("nebula", "update"), primary=True)
+        snap = p.group("System snapshots", "Btrfs + Snapper. Roll back from the GRUB menu → NebulaOS snapshots.")
+        snap.action("Create a snapshot", "", "Create", lambda: in_terminal("nebula", "snapshot", "create"))
+        snap.action("List snapshots", "", "Show", lambda: in_terminal("nebula", "snapshot", "list"))
+        changelog = SHARE / "CHANGELOG.md"
+        if changelog.exists():
+            news = p.group("What is new")
+            text = QPlainTextEdit(changelog.read_text(encoding="utf-8"))
+            text.setReadOnly(True)
+            text.setMinimumHeight(200)
+            news.widget(text)
+
+        def done(result):
+            text = result[1] if isinstance(result, tuple) else ""
+            status.setText(text.split('"tooltip":"')[1].split('"')[0] if '"tooltip":"' in text and "󰚰" in text
+                           else _("System is up to date"))
+        background(lambda: run("update", "--check"), done)
+        return p
+
+    def page_privacy(self):
+        p = Page("Privacy and security")
+        g = p.group("Protection")
+        g.action("Firewall", "Block incoming traffic except needed ports", "Enable",
+                 lambda: in_terminal("nebula", "server", "firewall"))
+        g.action("Screen lock", "Lock after inactivity, password on wake", "Settings…", lambda: kcm("kcm_screenlocker"))
+        n = p.group("Network privacy", "For your own labs, CTFs and tests you are authorized to run.")
+        n.action("Random MAC address", "Wi-Fi and Ethernet", "Enable", lambda: in_terminal("nebula", "privacy", "mac", "on"))
+        n.action("Real MAC address", "", "Restore", lambda: in_terminal("nebula", "privacy", "mac", "off"))
+        n.action("Tor", "SOCKS5 127.0.0.1:9050, run apps with torsocks", "Toggle",
+                 lambda: in_terminal("sh", "-c", "nebula tor status | grep -q 'Tor: on' && nebula tor off || nebula tor on"))
+        n.action("Private browser", "Separate throwaway Firefox profile (sandboxed if firejail is installed)",
+                 "Open", lambda: run("private-browser"))
+        return p
+
+    def page_storage(self):
+        p = Page("Storage and backups")
+        g = p.group("Disks")
+        seen = set()
+        for line in out("df", "-B1", "--output=target,size,used", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs",
+                        "-x", "overlay", "-x", "efivarfs").splitlines()[1:]:
+            parts = line.split()
+            if len(parts) == 3 and parts[1].isdigit() and int(parts[1]) > 1 << 30 and parts[0] not in seen:
+                seen.add(parts[0])
+                usage_row(g, parts[0], int(parts[2]), int(parts[1]))
+        g.action("What takes space", "", "Open", lambda: subprocess.Popen(["filelight", str(Path.home())]))
+        g.action("Clean up", "Package cache, unused packages, old logs and thumbnails", "Clean", lambda: in_terminal("nebula", "clean"))
+        b = p.group("Backups", "Copy of your home folder (rsync) to a drive or folder.")
+        b.action("Backup folder", "For example an external drive", "Choose…", self.pick_backup)
+        b.action("Back up now", "", "Back up", lambda: in_terminal("nebula", "backup", "run"))
+        b.switch("Every day automatically", "", False,
+                 lambda on: self.toast(run("backup", "auto", "on" if on else "off")[1]))
+        return p
+
+    def pick_backup(self):
+        path = QFileDialog.getExistingDirectory(self, _("Backup folder"), str(Path.home()))
+        if path:
+            self.toast(run("backup", "set", path)[1])
+
+    def page_users(self):
+        p = Page("Users")
+        g = p.group()
+        g.action(os.environ.get("USER", "user"), _("You"), "Password and photo…", lambda: kcm("kcm_users"))
+        g.action("Add a user", "", "Add…", lambda: kcm("kcm_users"))
+        return p
+
+    def page_datetime(self):
+        p = Page("Date and time")
+        g = p.group()
+        g.action("Time zone", out("timedatectl", "show", "-p", "Timezone", "--value") or "—", "Change…",
+                 lambda: kcm("kcm_clock"))
+        g.action("Set time automatically", "", "Settings…", lambda: kcm("kcm_clock"))
+        return p
+
+    def page_language(self):
+        p = Page("Language and region")
+        codes = [c for c, _n in LANGUAGES]
+        g = p.group("", "The keyboard layout follows the language (Alt+Shift switches).")
+        g.combo("Interface language", [n for _c, n in LANGUAGES], codes.index(current()), self.set_lang)
+        g.action("Formats", "Dates, numbers, currency", "Settings…", lambda: kcm("kcm_regionandlang"))
+        return p
+
+    def set_lang(self, index):
+        code = LANGUAGES[index][0]
+        if code != current():
+            run("lang", code)
+            os.execv(sys.argv[0], sys.argv)
+
+    # ---------- NebulaOS ----------
+    def page_features(self):
+        p = Page("Mode features")
+        envd = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "environment.d"
+        g = p.group("Gaming")
+        g.switch("MangoHud in all games", "FPS and load on top of games (after re-login)",
+                 (envd / "90-mangohud.conf").exists(),
+                 lambda on: self.toast(run("game", "mangohud", "on" if on else "off")[1]))
+        g.action("Turbo mode", "Pause desktop effects for maximum FPS", "Toggle", lambda: run("perf"))
+        g.action("Epic, GOG, Proton-GE, OBS", "Launchers and game recording are in the store", "Store",
+                 lambda: subprocess.Popen(["nebula-store"]))
+        h = p.group("Hacking", "For your own labs, CTFs and tests you are authorized to run.")
+        for lab, desc in [("dvwa", "DVWA — deliberately vulnerable web app"), ("juice-shop", "OWASP Juice Shop"),
+                          ("webgoat", "OWASP WebGoat")]:
+            h.action(_("Lab {}").format(lab), _(desc) + " · " + _("127.0.0.1 only, needs Docker"), "Start",
+                     lambda l=lab: in_terminal("nebula", "lab", "start", l))
+        s = p.group("Server")
+        s.action("Service status", "", "Show", lambda: in_terminal("nebula", "server", "status"))
+        for key, title in [("ssh", "SSH"), ("docker", "Docker"), ("cockpit", "Cockpit (web panel :9090)"),
+                           ("web", "nginx web server"), ("db", "PostgreSQL")]:
+            s.action(title, "Enable and open its firewall port", "Enable",
+                     lambda k=key: in_terminal("nebula", "server", "enable", k))
+        r = p.group("Ready-made servers", "Deployed with Docker into /srv/nebula.")
+        for tpl, title, desc in [("files", "File sharing", "File Browser, port 8080"),
+                                 ("media", "Media server", "Jellyfin, port 8096"),
+                                 ("minecraft", "Minecraft server", "Java Edition, port 25565")]:
+            r.action(title, desc, "Deploy", lambda t=tpl: in_terminal("nebula", "template", "deploy", t))
+        return p
+
+    def page_apps(self):
+        p = Page("Apps")
+        g = p.group()
+        g.action("App store", "Arch and Flathub (Super+Shift+A)", "Open", lambda: subprocess.Popen(["nebula-store"]),
+                 primary=True)
+        g.action("Default apps", "Browser, email, file manager, terminal", "Settings…", lambda: kcm("kcm_componentchooser"))
+        g.action("Autostart", "Apps that start when you log in", "Settings…", lambda: kcm("kcm_autostart"))
+        g.action("Graphics drivers", "Auto-detect NVIDIA / AMD / Intel", "Detect", lambda: in_terminal("nebula", "drivers"))
+        g.action("Welcome tour", "", "Open", lambda: subprocess.Popen(["nebula-welcome"]))
+        return p
+
+    def page_ai(self):
+        p = Page("Assistant", "Local Ollama model: your data never leaves this computer. Super+A opens the assistant.")
+        g = p.group()
+        conf = CONF / "assistant.conf"
+        model_now = ""
+        for f in (Path("/etc/nebulaos/assistant.conf"), conf):
+            if f.exists():
+                for line in f.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("model=") and line[6:].strip():
+                        model_now = line[6:].strip()
+        models = ["qwen2.5:1.5b", "qwen2.5:3b", "qwen2.5:7b", "llama3.2:3b"]
+        if model_now and model_now not in models:
+            models.insert(0, model_now)
+
+        def choose(i):
+            CONF.mkdir(parents=True, exist_ok=True)
+            lines = [l for l in conf.read_text(encoding="utf-8").splitlines() if not l.startswith("model=")] \
+                if conf.exists() else []
+            conf.write_text("\n".join(lines + [f"model={models[i]}"]) + "\n", encoding="utf-8")
+            self.toast(_("Model: {}").format(models[i]))
+        g.combo("Model", models, models.index(model_now) if model_now in models else 0, choose,
+                "Bigger models answer better but need more memory")
+        g.action("Download a model", "Downloaded with ollama pull (several GB)", "Download",
+                 lambda: in_terminal("ollama", "pull", model_now or models[0]))
+        g.action("Open the assistant", "", "Open", lambda: subprocess.Popen(["nebula-ai-overlay"]), primary=True)
+        return p
+
+    def page_about(self):
+        p = Page("About this system")
+        g = p.group()
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(24)
+        grid.setVerticalSpacing(8)
+        info_row(grid, 0, "System", f"NebulaOS {out('cat', str(SHARE / 'VERSION')).strip()}")
+        info_row(grid, 1, "Desktop", "KDE Plasma")
+        info_row(grid, 2, "Kernel", platform.release())
+        info_row(grid, 3, "Name", socket.gethostname())
+        holder = QWidget()
+        holder.setLayout(grid)
+        g.widget(holder)
+        g.action("Detailed hardware information", "", "Open", lambda: kcm("kcm_about-distro"))
+        return p
+
+    def page_install(self):
+        p = Page("Install NebulaOS", "Two ways: the whole disk, or next to Windows (dual boot, into free space). "
+                                     "Btrfs with snapshots, your user account, a boot menu to pick the OS.")
+        g = p.group()
+        g.action("Install to disk", "Graphical installer: disk, user, mode", "Install",
+                 lambda: subprocess.Popen(["nebula-install-gui"]), primary=True)
+        return p
+
+
+def main():
+    a = app("nebula-hub", "nebula-settings")
+    w = Settings()
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

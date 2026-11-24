@@ -1,0 +1,15 @@
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = plasma-workspace
+Target = plasma-desktop
+Target = kwin
+Target = sddm-kcm
+Target = plymouth-kcm
+Target = nebulaos-desktop
+
+[Action]
+Description = NebulaOS: keeping the design locked...
+When = PostTransaction
+Exec = /usr/lib/nebulaos/style-lock

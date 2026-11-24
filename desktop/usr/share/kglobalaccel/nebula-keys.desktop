@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Keyboard shortcuts
+Name[ru]=Горячие клавиши
+Name[uk]=Гарячі клавіші
+Name[it]=Scorciatoie da tastiera
+Exec=nebula keys
+X-KDE-Shortcuts=Meta+/
+Icon=input-keyboard
+NoDisplay=true

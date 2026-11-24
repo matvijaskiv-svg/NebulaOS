@@ -1,0 +1,9 @@
+# NebulaOS: File Browser file sharing (web, port 8080). First login: admin, the password is in the container logs.
+services:
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    restart: unless-stopped
+    ports: ["8080:80"]
+    volumes:
+      - ./data:/srv
+      - ./database:/database

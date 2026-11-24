@@ -1,0 +1,37 @@
+# NebulaOS: terminal shell setup (foot starts bash with this file).
+[[ -f ~/.bashrc ]] && source ~/.bashrc
+
+__nebula_mode=$(nebula mode --current 2>/dev/null)
+case $__nebula_mode in
+  gaming)  __c1='\[\e[38;2;123;47;247m\]'; __c2='\[\e[38;2;0;194;255m\]' ;;
+  hacking) __c1='\[\e[38;2;203;166;247m\]'; __c2='\[\e[38;2;245;194;231m\]' ;;
+  server)  __c1='\[\e[38;2;233;84;32m\]';  __c2='\[\e[38;2;246;160;61m\]' ;;
+  *)       __c1='\[\e[35m\]'; __c2='\[\e[36m\]' ;;
+esac
+__r='\[\e[0m\]'
+
+__nebula_prompt() {
+  __nebula_rc=$?
+  history -a
+  local mark="${__c2}❯${__r}"
+  (( __nebula_rc != 0 )) && mark="\[\e[31m\]❯${__r}"
+  PS1="${__c1}\u${__r} ${__c2}\w${__r} ${mark} "
+}
+PROMPT_COMMAND="__nebula_prompt${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+HISTCONTROL=ignoreboth
+shopt -s histappend
+
+# fix — ask the assistant why the last command failed.
+# More detail: <command> 2>&1 | ai --stdin "why does this fail?"
+fix() {
+  local cmd rc=${__nebula_rc:-0}
+  cmd=$(fc -ln -2 -2 2>/dev/null | sed 's/^[[:space:]]*//')
+  [[ -n $cmd ]] || { echo 'No previous command.'; return 1; }
+  ai "A terminal command on Arch Linux (NebulaOS), \`$cmd\`, exited with code $rc. Briefly explain the likely cause and how to fix it. Only suggest commands, do not run anything."
+}
+alias ls='ls --color=auto' grep='grep --color=auto' ll='ls -lah'
+
+# A short system summary with the NebulaOS logo when a terminal opens.
+if [[ -z ${NEBULA_NO_FETCH:-} ]] && command -v fastfetch >/dev/null; then
+  fastfetch --config /usr/share/nebulaos/fastfetch/config.jsonc 2>/dev/null
+fi

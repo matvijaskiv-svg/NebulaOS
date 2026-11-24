@@ -1,0 +1,182 @@
+{
+  "Games": [
+    {
+      "source": "arch",
+      "id": "steam",
+      "name": "Steam",
+      "desc": "Game store and library (needs multilib)"
+    },
+    {
+      "source": "flathub",
+      "id": "com.heroicgameslauncher.hgl",
+      "name": "Heroic",
+      "desc": "Epic Games, GOG and Amazon games in one launcher"
+    },
+    {
+      "source": "arch",
+      "id": "lutris",
+      "name": "Lutris",
+      "desc": "Windows games, emulators and many stores"
+    },
+    {
+      "source": "flathub",
+      "id": "net.davidotek.pupgui2",
+      "name": "ProtonUp-Qt",
+      "desc": "Install Proton-GE and Wine-GE"
+    },
+    {
+      "source": "flathub",
+      "id": "com.usebottles.bottles",
+      "name": "Bottles",
+      "desc": "Run Windows apps"
+    },
+    {
+      "source": "flathub",
+      "id": "org.prismlauncher.PrismLauncher",
+      "name": "Prism Launcher",
+      "desc": "Minecraft launcher"
+    },
+    {
+      "source": "arch",
+      "id": "obs-studio",
+      "name": "OBS Studio",
+      "desc": "Streaming, recording and replay buffer (last seconds of gameplay)"
+    }
+  ],
+  "Chat and internet": [
+    {
+      "source": "arch",
+      "id": "telegram-desktop",
+      "name": "Telegram",
+      "desc": "Messenger"
+    },
+    {
+      "source": "flathub",
+      "id": "com.discordapp.Discord",
+      "name": "Discord",
+      "desc": "Voice chat and communities"
+    },
+    {
+      "source": "arch",
+      "id": "thunderbird",
+      "name": "Thunderbird",
+      "desc": "Email"
+    },
+    {
+      "source": "arch",
+      "id": "qbittorrent",
+      "name": "qBittorrent",
+      "desc": "Torrent client"
+    }
+  ],
+  "Media and creativity": [
+    {
+      "source": "arch",
+      "id": "vlc",
+      "name": "VLC",
+      "desc": "Video player"
+    },
+    {
+      "source": "flathub",
+      "id": "com.spotify.Client",
+      "name": "Spotify",
+      "desc": "Music"
+    },
+    {
+      "source": "arch",
+      "id": "gimp",
+      "name": "GIMP",
+      "desc": "Image editor"
+    },
+    {
+      "source": "arch",
+      "id": "krita",
+      "name": "Krita",
+      "desc": "Digital painting"
+    },
+    {
+      "source": "arch",
+      "id": "kdenlive",
+      "name": "Kdenlive",
+      "desc": "Video editor"
+    },
+    {
+      "source": "arch",
+      "id": "blender",
+      "name": "Blender",
+      "desc": "3D graphics and animation"
+    }
+  ],
+  "Development": [
+    {
+      "source": "arch",
+      "id": "code",
+      "name": "Code - OSS",
+      "desc": "Code editor (open-source build of VS Code)"
+    },
+    {
+      "source": "arch",
+      "id": "neovim",
+      "name": "Neovim",
+      "desc": "Terminal editor"
+    },
+    {
+      "source": "arch",
+      "id": "docker",
+      "name": "Docker",
+      "desc": "Containers"
+    },
+    {
+      "source": "flathub",
+      "id": "md.obsidian.Obsidian",
+      "name": "Obsidian",
+      "desc": "Notes and knowledge base"
+    }
+  ],
+  "Security": [
+    {
+      "source": "arch",
+      "id": "keepassxc",
+      "name": "KeePassXC",
+      "desc": "Password manager"
+    },
+    {
+      "source": "arch",
+      "id": "wireshark-qt",
+      "name": "Wireshark",
+      "desc": "Network traffic analysis"
+    },
+    {
+      "source": "arch",
+      "id": "nmap",
+      "name": "Nmap",
+      "desc": "Network scanner (for networks you own)"
+    },
+    {
+      "source": "arch",
+      "id": "ghidra",
+      "name": "Ghidra",
+      "desc": "Reverse engineering"
+    },
+    {
+      "source": "arch",
+      "id": "firejail",
+      "name": "Firejail",
+      "desc": "App sandbox"
+    }
+  ],
+  "Office": [
+    {
+      "source": "arch",
+      "id": "libreoffice-fresh",
+      "name": "LibreOffice",
+      "desc": "Documents, spreadsheets, presentations"
+    },
+    {
+      "source": "flathub",
+      "id": "com.github.tchx84.Flatseal",
+      "name": "Flatseal",
+      "desc": "Flatpak app permissions"
+    }
+  ]
+}
