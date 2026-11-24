@@ -56,6 +56,17 @@ while IFS= read -r -d '' f; do   # CRLF, если файлы правили в W
   sed -i 's/\r$//' -- "$profile/${f#"$src"/}"
 done < <(find "$src/airootfs" "$src/profiledef.sh" "$src/pacman.conf" -type f -print0)
 chmod 0755 "$profile"/airootfs/usr/local/bin/nebula-install{,-gui}
+# Version in the ISO name; NEBULA_ADMIN=1 builds the maintainer's personal ISO with the admin panel.
+ver=$(sed -n 's/^pkgver=//p' "$src/pkg/PKGBUILD")
+sed -i "s/^iso_version=.*/iso_version=\"$ver\"/" "$profile/profiledef.sh"
+if [[ ${NEBULA_ADMIN:-0} == 1 ]]; then
+  printf '==> Personal ISO: with the admin panel\n'
+  [[ -f $src/tools/admin/nebula-admin ]] || die 'tools/admin/nebula-admin is missing (it is kept only on your computer)'
+  sed -i "s/^iso_name=.*/iso_name=\"nebulaos-admin\"/" "$profile/profiledef.sh"
+  install -Dm755 "$src/tools/admin/nebula-admin" "$profile/airootfs/usr/local/bin/nebula-admin"
+  install -Dm644 "$src/tools/admin/nebula-admin.desktop" "$profile/airootfs/usr/local/share/applications/nebula-admin.desktop"
+  sed -i '/\["\/usr\/local\/bin\/nebula-install"\]=/i\  ["/usr/local/bin/nebula-admin"]="0:0:755"' "$profile/profiledef.sh"
+fi
 install -d "$profile/airootfs/home/nebula" "$profile/airootfs/opt/nebulaos"
 cp -a -- "$repo" "$profile/airootfs/opt/nebulaos/repo"
 printf '\n[nebulaos]\nSigLevel = Optional TrustAll\nServer = file://%s\n' "$repo" >> "$profile/pacman.conf"

@@ -2,3 +2,5 @@ out/
 *.iso
 __pycache__/
 *.pyc
+tools/admin/nebula-admin
+tools/admin/nebula-admin.desktop

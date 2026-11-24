@@ -169,6 +169,11 @@ pkgs=(base "$kernel" "$kernel-headers" linux-firmware $ucode btrfs-progs grub gr
 pacstrap -C "$conf" -K "$MNT" "${pkgs[@]}"
 rm -f "$conf"
 genfstab -U "$MNT" >> "$MNT/etc/fstab"
+# Personal ISO: keep the admin panel on the installed system (the signing key is imported in it).
+if [[ -x /usr/local/bin/nebula-admin ]]; then
+  install -Dm755 /usr/local/bin/nebula-admin "$MNT/usr/local/bin/nebula-admin"
+  install -Dm644 /usr/local/share/applications/nebula-admin.desktop "$MNT/usr/local/share/applications/nebula-admin.desktop"
+fi
 # The AI model from the ISO (if any) goes to the installed system too.
 [[ -d /var/lib/ollama/blobs ]] && install -d "$MNT/var/lib/ollama" && cp -a /var/lib/ollama/. "$MNT/var/lib/ollama/"
 
