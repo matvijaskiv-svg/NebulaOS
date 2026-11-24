@@ -8,8 +8,9 @@
 # What it does:
 #   1. sets the version (pkg/PKGBUILD, channel/channel.json, CHANGELOG);
 #   2. builds the nebulaos-desktop package and the pacman repository (tools/publish-repo.sh);
-#   3. uploads the repository to the GitHub release "repo" (pacman reads it from there);
-#   4. adds a news item and pushes the code + channel to GitHub (users get a notification).
+#   3. adds a news item, pushes the source (it may be a private repository);
+#   4. publishes the package repository and the signed channel to the PUBLIC NebulaOS-updates
+#      repository (tools/push-updates.sh) — that is what installed systems download.
 set -euo pipefail
 src=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$src"
@@ -48,13 +49,9 @@ echo "==> Package and repository"
 rm -rf out/repo
 bash tools/publish-repo.sh
 
-echo "==> Upload to GitHub release \"repo\""
-gh release view repo >/dev/null 2>&1 || gh release create repo --title "NebulaOS update repository" \
-  --notes "pacman repository used by nebula update. Do not delete." --latest=false
-gh release upload repo out/repo/* --clobber
-
 echo "==> Push code and news"
 git add -A pkg desktop channel
 git commit -m "NebulaOS $ver: $note" || true
 git push
+bash tools/push-updates.sh all
 echo "Done: NebulaOS $ver is published. Installed systems get it with nebula update."

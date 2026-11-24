@@ -1,5 +1,9 @@
 # NebulaOS changelog
 
+## 0.7.0 (in progress)
+- Updates and the signed channel come from the public repository NebulaOS-updates;
+  the source repository can be private (tools/push-updates.sh).
+
 ## 0.6.1
 - First release of the NebulaOS update channel
 

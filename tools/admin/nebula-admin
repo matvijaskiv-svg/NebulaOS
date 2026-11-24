@@ -37,8 +37,9 @@ from PySide6.QtWidgets import (  # noqa: E402
     QListWidgetItem, QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
-REPO = "matvijaskiv-svg/NebulaOS"
-RAW = f"https://raw.githubusercontent.com/{REPO}/main"
+REPO = "matvijaskiv-svg/NebulaOS"                    # source (can be private)
+UPDATES = "matvijaskiv-svg/NebulaOS-updates"         # public: what systems download
+RAW = f"https://raw.githubusercontent.com/{UPDATES}/main"
 CONF = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "nebulaos"
 KEY = Path(os.environ.get("NEBULA_ADMIN_KEY", CONF / "admin.key"))
 COMMUNITY = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "nebula-chat/community.json"
@@ -51,8 +52,8 @@ def load_conf():
         return {"checkout": str(Path.home() / "NebulaOS")}
 
 
-def github(path):
-    req = urllib.request.Request(f"https://api.github.com/repos/{REPO}{path}",
+def github(path, repo=UPDATES):
+    req = urllib.request.Request(f"https://api.github.com/repos/{repo}{path}",
                                  headers={"Accept": "application/vnd.github+json", "User-Agent": "nebulaos-admin"})
     with urllib.request.urlopen(req, timeout=15) as r:
         return json.loads(r.read().decode())
@@ -187,7 +188,7 @@ class Admin(QMainWindow):
         files = " ".join(shlex.quote(x) for x in ["channel", "desktop/usr/share/nebulaos/channel.json",
                                                   "desktop/usr/share/nebulaos/channel.sig", *extra])
         in_terminal("bash", "-c", f"cd {shlex.quote(str(self.checkout))} && git add {files} && "
-                    f"git commit -m {shlex.quote(message)} && git push")
+                    f"git commit -m {shlex.quote(message)} && git push && bash tools/push-updates.sh channel")
         return True
 
     def show_page(self, row):
@@ -207,7 +208,7 @@ class Admin(QMainWindow):
 
     # ---------- Dashboard ----------
     def page_dashboard(self):
-        p = Page("Dashboard", "github.com/" + REPO)
+        p = Page("Dashboard", "github.com/" + UPDATES)
         com = community().get("community", {})
         now = time.time()
         online = sum(1 for u in com.values() if now - u.get("seen", 0) < 900)

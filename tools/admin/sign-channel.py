@@ -14,6 +14,13 @@ root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(root / "desktop/usr/lib/nebulaos"))
 import nebula_sign  # noqa: E402
 
+if "--check" in sys.argv:
+    pubhex = (root / "desktop/usr/share/nebulaos/admin.pub").read_text().strip()
+    d = root / "channel"
+    if not nebula_sign.verify(pubhex, (d / "channel.json").read_bytes(), (d / "channel.sig").read_text()):
+        sys.exit("channel/channel.json is not signed (run tools/admin/sign-channel.py)")
+    print("channel signature OK")
+    sys.exit(0)
 key = Path(os.environ.get("NEBULA_ADMIN_KEY", Path.home() / ".config/nebulaos/admin.key"))
 pub = root / "desktop/usr/share/nebulaos/admin.pub"
 if "--new-key" in sys.argv:

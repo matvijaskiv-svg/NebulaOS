@@ -581,8 +581,8 @@ $(t 'Top-left corner — all windows')"
 }
 
 # ---------- NebulaOS channel: news, support address, latest version ----------
-# A JSON file in the NebulaOS GitHub repository; no server of our own.
-CHANNEL_URL=${NEBULA_CHANNEL_URL:-https://raw.githubusercontent.com/matvijaskiv-svg/NebulaOS/main/channel/channel.json}
+# A signed JSON file in the public NebulaOS-updates repository; no server of our own.
+CHANNEL_URL=${NEBULA_CHANNEL_URL:-https://raw.githubusercontent.com/matvijaskiv-svg/NebulaOS-updates/main/channel/channel.json}
 cmd_news() {
   local dir=${XDG_CACHE_HOME:-$HOME/.cache}/nebulaos tmp
   install -d "$dir" "$CONF"

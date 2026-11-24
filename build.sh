@@ -36,7 +36,7 @@ conf=$src/desktop/etc/pacman.d/nebulaos-repo.conf
 conf_backup=$(mktemp)
 cp -- "$conf" "$conf_backup"
 trap 'cp -- "$conf_backup" "$conf"; rm -f -- "$conf_backup"' EXIT
-NEBULA_REPO_URL=${NEBULA_REPO_URL-https://github.com/matvijaskiv-svg/NebulaOS/releases/download/repo}
+NEBULA_REPO_URL=${NEBULA_REPO_URL-https://github.com/matvijaskiv-svg/NebulaOS-updates/releases/download/repo}
 if [[ -n ${NEBULA_REPO_URL:-} ]]; then
   printf '[nebulaos]\nSigLevel = Optional TrustAll\nServer = %s\n' "$NEBULA_REPO_URL" > "$conf"
 fi

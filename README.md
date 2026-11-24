@@ -76,10 +76,17 @@
 
 ## Как выпускать обновления NebulaOS
 
-Всё идёт через GitHub `matvijaskiv-svg/NebulaOS`, своего сервера нет.
+Своего сервера нет, всё идёт через два репозитория GitHub (с версии 0.7):
+- `matvijaskiv-svg/NebulaOS` — исходники, сборка, админка. Его можно сделать **приватным**.
+- `matvijaskiv-svg/NebulaOS-updates` — **публичный**, только то, что скачивают системы: подписанный канал `channel/`
+  и релиз `repo` с пакетами. Обновляется скриптом `tools/push-updates.sh` (его вызывают `release.sh` и админка).
+  При первом запуске скрипт сам создаёт этот репозиторий.
+
+Переезд: опубликуйте один раз `bash tools/push-updates.sh all`, соберите ISO 0.7, затем сделайте `NebulaOS` приватным.
+ISO 0.6 смотрит в старые адреса: после закрытия `NebulaOS` обновления и новости в нём перестанут приходить.
 
 - **Пакеты.** Pacman в каждой NebulaOS читает репозиторий `[nebulaos]` из GitHub-релиза `repo`
-  (`https://github.com/matvijaskiv-svg/NebulaOS/releases/download/repo`, адрес по умолчанию в `build.sh`).
+  (`https://github.com/matvijaskiv-svg/NebulaOS-updates/releases/download/repo`, адрес по умолчанию в `build.sh`).
 - **Новости и проверка версии.** Файл `channel/channel.json` в ветке `main`: новости, последняя версия,
   адрес поддержки. Таймер `nebula-update-check` (через 3 минуты после входа и затем каждые 6 часов)
   показывает уведомления о новостях, о новой версии и о наличии обновлений.
