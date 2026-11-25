@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=NebulaOS screen time
+Exec=nebula-screentimed
+NoDisplay=true
+X-KDE-autostart-phase=2

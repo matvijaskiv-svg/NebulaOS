@@ -8,6 +8,7 @@ act.writeConfig("icon", "nebulaos");
 bar.addWidget("org.kde.plasma.panelspacer");
 addClock(bar, true);
 bar.addWidget("org.kde.plasma.panelspacer");
+addControlButton(bar);
 bar.addWidget("org.kde.plasma.systemtray");
 
 var dock = dockPanel("left", 2.7, true, false);
@@ -18,6 +19,8 @@ dock.addWidget("org.kde.plasma.trash");
 var grid = dock.addWidget("org.kde.plasma.kickoff");
 grid.currentConfigGroup = ["General"];
 grid.writeConfig("icon", "view-app-grid-symbolic");
+
+desktopWidgets([["org.kde.plasma.systemmonitor.cpu", 180], ["org.kde.plasma.systemmonitor.memory", 180], ["org.kde.plasma.systemmonitor.diskusage", 180], ["org.kde.plasma.systemmonitor.net", 160]]);
 
 // Lock the layout again: users cannot edit panels (NebulaOS can, through scripting).
 panels().forEach(function (p) { safe(function () { p.locked = true; }); });

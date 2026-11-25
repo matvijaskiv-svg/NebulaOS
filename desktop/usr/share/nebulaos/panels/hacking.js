@@ -3,6 +3,7 @@ var bar = topBar(1.5);
 addMenu(bar, "nebulaos");
 bar.addWidget("org.kde.plasma.appmenu");
 bar.addWidget("org.kde.plasma.panelspacer");
+addControlButton(bar);
 bar.addWidget("org.kde.plasma.systemtray");
 addClock(bar, true);
 look(bar, "translucent");                 // glass top bar like macOS
@@ -14,6 +15,8 @@ addTasks(dock, launchers(["applications:nebula-toolkit.desktop", "applications:o
                           "applications:nebula-store.desktop"]), true);
 dock.addWidget("org.kde.plasma.marginsseparator");
 dock.addWidget("org.kde.plasma.trash");
+
+desktopWidgets([["org.kde.plasma.notes", 220], ["org.kde.plasma.systemmonitor.net", 180], ["org.kde.plasma.systemmonitor.cpu", 180]]);
 
 // Lock the layout again: users cannot edit panels (NebulaOS can, through scripting).
 panels().forEach(function (p) { safe(function () { p.locked = true; }); });

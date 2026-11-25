@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Screen time service: counts minutes per app in front (reported by the KWin script
+nebulascreentime over D-Bus) and enforces daily limits: a warning, then the app closes."""
+import json
+import os
+import subprocess
+import sys
+import time
+from datetime import date
+from pathlib import Path
+
+from PySide6.QtCore import ClassInfo, QCoreApplication, QObject, QTimer, Slot
+from PySide6.QtDBus import QDBusConnection
+
+DATA = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "nebulaos/screentime"
+LIMITS = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "nebulaos/screentime-limits.json"
+TICK = 10   # seconds
+IGNORE = {"", "plasmashell", "org.kde.plasmashell", "krunner", "nebula-spotlight", "nebula-control", "kwin_wayland"}
+
+
+@ClassInfo({"D-Bus Interface": "org.nebulaos.ScreenTime"})
+class Service(QObject):
+    def __init__(self):
+        super().__init__()
+        self.active = ""
+        self.day = date.today().isoformat()
+        self.usage = self.load()
+        self.warned = set()
+        self.dirty = False
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.tick)
+        self.timer.start(TICK * 1000)
+        self.saver = QTimer(self)
+        self.saver.timeout.connect(self.save)
+        self.saver.start(60000)
+
+    @Slot(str)
+    def Active(self, app_class):  # noqa: N802  (D-Bus method name)
+        self.active = app_class.lower()
+
+    def load(self):
+        try:
+            return json.loads((DATA / f"{self.day}.json").read_text())
+        except (OSError, ValueError):
+            return {}
+
+    def save(self):
+        if not self.dirty:
+            return
+        DATA.mkdir(parents=True, exist_ok=True)
+        (DATA / f"{self.day}.json").write_text(json.dumps(self.usage))
+        self.dirty = False
+
+    def locked(self):
+        r = subprocess.run(["loginctl", "show-session", os.environ.get("XDG_SESSION_ID", "auto"), "-p", "LockedHint"],
+                           capture_output=True, text=True)
+        return "yes" in r.stdout
+
+    def tick(self):
+        today = date.today().isoformat()
+        if today != self.day:
+            self.save()
+            self.day, self.usage, self.warned = today, {}, set()
+        if self.active in IGNORE or self.locked():
+            return
+        self.usage[self.active] = self.usage.get(self.active, 0) + TICK
+        self.dirty = True
+        self.enforce(self.active)
+
+    def enforce(self, app):
+        try:
+            limits = json.loads(LIMITS.read_text())
+        except (OSError, ValueError):
+            return
+        limit = limits.get(app)
+        if not limit:
+            return
+        used = self.usage.get(app, 0) / 60
+        if used >= limit - 5 and app not in self.warned:
+            self.warned.add(app)
+            subprocess.Popen(["notify-send", "-a", "NebulaOS", "-u", "critical", "-i", "chronometer",
+                              "Screen time", f"{app}: 5 min left today"])
+        if used >= limit:
+            subprocess.Popen(["notify-send", "-a", "NebulaOS", "-i", "chronometer", "Screen time",
+                              f"{app}: the daily limit is reached"])
+            subprocess.run(["pkill", "-i", "-f", app])
+
+
+def main():
+    app = QCoreApplication(sys.argv)
+    bus = QDBusConnection.sessionBus()
+    service = Service()
+    if not bus.registerService("org.nebulaos.ScreenTime"):
+        return 0          # already running
+    bus.registerObject("/ScreenTime", service, QDBusConnection.ExportAllSlots)
+    app.aboutToQuit.connect(service.save)
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

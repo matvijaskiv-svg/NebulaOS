@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""Backups, Time Machine style: pick a drive, back up every hour automatically,
+see every copy by date and bring back any file from any of them."""
+import os
+import shutil
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, Meter, Page, app, fit, run  # noqa: E402
+from PySide6.QtCore import QProcess, Qt  # noqa: E402
+from PySide6.QtWidgets import QFileDialog, QLabel, QMainWindow, QMessageBox, QProgressBar, QVBoxLayout, QWidget  # noqa: E402
+
+CONF = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "nebulaos/backup-dest"
+
+
+def dest():
+    try:
+        return Path(CONF.read_text().strip())
+    except OSError:
+        return None
+
+
+def backup_root():
+    d = dest()
+    if not d:
+        return None
+    import socket
+    return d / "NebulaOS-Backups" / f"{socket.gethostname()}-{os.environ.get('USER', 'user')}"
+
+
+def snapshots():
+    root = backup_root()
+    if not root or not root.exists():
+        return []
+    return sorted((p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and p.name[:2] == "20"),
+                  reverse=True)
+
+
+def drives():
+    base = Path("/run/media") / os.environ.get("USER", "")
+    return sorted(p for p in base.iterdir() if p.is_dir()) if base.exists() else []
+
+
+def pretty(snap):
+    try:
+        return datetime.strptime(snap.name, "%Y-%m-%d_%H%M").strftime("%d.%m.%Y  %H:%M")
+    except ValueError:
+        return snap.name
+
+
+class Backup(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("Backups"))
+        self.proc = None
+        self.holder = QWidget()
+        self.lay = QVBoxLayout(self.holder)
+        self.lay.setContentsMargins(0, 0, 0, 0)
+        self.setCentralWidget(self.holder)
+        self.build()
+        fit(self, 820, 680)
+
+    def build(self):
+        while self.lay.count():
+            w = self.lay.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        p = Page("Backups", "Copies of your home folder on another drive. Every copy keeps its date; "
+                            "unchanged files take no extra space.")
+        d = dest()
+        g = p.group("Backup drive")
+        connected = bool(d and d.exists())
+        g.action(str(d) if d else _("Not chosen"), _("Connected") if connected else
+                 (_("Not connected") if d else _("Choose a USB drive or a disk")), "Choose…", self.choose,
+                 primary=not d)
+        for drive in drives():
+            if not d or drive != d:
+                g.action(drive.name, _("USB drive"), "Use", lambda dr=drive: self.set_dest(dr))
+        if connected:
+            u = shutil.disk_usage(d)
+            free = QWidget()
+            fv = QVBoxLayout(free)
+            fv.setContentsMargins(0, 4, 0, 4)
+            fv.addWidget(QLabel(_("Free on the drive: {} GB of {} GB").format(u.free // 2**30, u.total // 2**30)))
+            fv.addWidget(Meter(u.used / u.total))
+            g.widget(free)
+        a = p.group()
+        auto = run("backup", "auto", "status")[1].strip() == "enabled"
+        a.switch("Back up automatically every hour", "Only while the drive is connected", auto,
+                 lambda on: run("backup", "auto", "on" if on else "off"))
+        self.now_btn = a.action("Back up now", self.last_text(), "Back up", self.backup_now, primary=connected)
+        self.now_btn.setEnabled(connected)
+        self.bar = QProgressBar()
+        self.bar.hide()
+        a.widget(self.bar)
+        s = p.group("Copies")
+        snaps = snapshots()
+        if not snaps:
+            s.widget(QLabel(_("No copies yet.")))
+        for snap in snaps[:40]:
+            s.action(pretty(snap), "", "Restore a file…", lambda sn=snap: self.restore(sn))
+        self.lay.addWidget(p)
+
+    def last_text(self):
+        root = backup_root()
+        try:
+            return _("Last copy: {}").format((root / "last-backup").read_text().strip())
+        except (OSError, TypeError):
+            return _("No copies yet.")
+
+    def choose(self):
+        path = QFileDialog.getExistingDirectory(self, _("Backup drive"), "/run/media")
+        if path:
+            self.set_dest(Path(path))
+
+    def set_dest(self, path):
+        run("backup", "set", str(path))
+        self.build()
+
+    def backup_now(self):
+        self.now_btn.setEnabled(False)
+        self.bar.setRange(0, 0)
+        self.bar.show()
+        self.proc = QProcess(self)
+        self.proc.setProcessChannelMode(QProcess.MergedChannels)
+        self.proc.readyReadStandardOutput.connect(self.progress)
+        self.proc.finished.connect(lambda *_a: self.build())
+        self.proc.start("nebula", ["backup", "run"])
+
+    def progress(self):
+        text = bytes(self.proc.readAllStandardOutput()).decode(errors="replace")
+        import re
+        found = re.findall(r"(\d{1,3})%", text)
+        if found:
+            self.bar.setRange(0, 100)
+            self.bar.setValue(int(found[-1]))
+
+    def restore(self, snap):
+        path, _f = QFileDialog.getOpenFileName(self, _("Choose a file to bring back"), str(snap))
+        if not path:
+            return
+        rel = Path(path).relative_to(snap)
+        target = Path.home() / rel
+        if target.exists():
+            answer = QMessageBox.question(self, _("Backups"), _("{} already exists. Keep both?").format(rel),
+                                          QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+            if answer == QMessageBox.Cancel:
+                return
+            if answer == QMessageBox.Yes:
+                target = target.with_name(f"{target.stem} ({_('restored')}){target.suffix}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
+        QMessageBox.information(self, _("Backups"), _("Restored: {}").format(target))
+
+
+def main():
+    a = app("nebula-backup", "drive-harddisk")
+    w = Backup()
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

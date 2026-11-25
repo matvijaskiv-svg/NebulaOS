@@ -259,7 +259,7 @@ Add…	Додати…
 Battery	Батарея
 Charging	заряджається
 Discharging	розряджається
-Full	заряджена
+Full	заряджено
 Not charging	не заряджається
 Sleep, screen off and lid	Сон, вимкнення екрана й кришка
 Protection	Захист
@@ -780,3 +780,85 @@ Containers: {}	Контейнерів: {}
 Up for {} h {} min	Працює {} год {} хв
 running	працює
 stopped	зупинено
+Control Center	Центр керування
+Search everything	Пошук усього
+Do not disturb	Не турбувати
+Lock	Блокування
+Mode: Gaming	Режим: Ігри
+Mode: Hacking	Режим: Хакінг
+Mode: Server	Режим: Сервер
+Shut down	Вимкнути
+Search apps, files, or type 2+2…	Програми, файли або приклад: 2+2…
+App	Програма
+Ask the assistant: “{}”	Запитати асистента: «{}»
+Search the web: “{}”	Шукати в інтернеті: «{}»
+Copies of your home folder on another drive. Every copy keeps its date; unchanged files take no extra space.	Копії вашої домашньої теки на іншому диску. Кожна копія має свою дату; незмінені файли не займають зайвого місця.
+Backup drive	Диск для копій
+Not chosen	Не вибрано
+Connected	Підключено
+Choose a USB drive or a disk	Оберіть флешку або диск
+USB drive	Флешка
+Use	Використати
+Free on the drive: {} GB of {} GB	Вільно на диску: {} ГБ з {} ГБ
+Back up automatically every hour	Робити копію щогодини автоматично
+Only while the drive is connected	Лише поки диск підключено
+Copies	Копії
+No copies yet.	Копій поки немає.
+Last copy: {}	Остання копія: {}
+Restore a file…	Відновити файл…
+Choose a file to bring back	Оберіть файл для відновлення
+{} already exists. Keep both?	{} вже є. Залишити обидва?
+restored	відновлено
+Restored: {}	Відновлено: {}
+Backup finished	Резервну копію створено
+Phone	Телефон
+Your phone and this computer work together: notifications, files, clipboard.	Телефон і комп'ютер працюють разом: сповіщення, файли, буфер обміну.
+1. Install KDE Connect on the phone	1. Встановіть KDE Connect на телефон
+2. Connect both to the same Wi-Fi	2. Підключіть обидва до однієї Wi-Fi мережі
+Open KDE Connect on the phone; the phone appears below.	Відкрийте KDE Connect на телефоні — він з'явиться нижче.
+3. Accept on the phone	3. Підтвердьте на телефоні
+Confirm the pairing request on the phone.	Підтвердьте запит на з'єднання на телефоні.
+Open link	Відкрити посилання
+Pair	Під'єднати
+nearby	поруч
+not nearby	не поруч
+No phone found yet.	Телефон поки не знайдено.
+Not nearby — open KDE Connect on the phone	Не поруч — відкрийте KDE Connect на телефоні
+Send files	Надіслати файли
+Find my phone	Знайти телефон
+It rings loudly, even in silent mode	Він гучно задзвонить, навіть у беззвучному режимі
+Ring	Подзвонити
+Send the clipboard	Надіслати буфер обміну
+Unpair	Від'єднати
+Now confirm the request on the phone.	Тепер підтвердьте запит на телефоні.
+All KDE Connect settings	Усі налаштування KDE Connect
+Remote input, media control, battery, shared folders	Пульт, керування музикою, батарея, спільні теки
+Screen time	Екранний час
+Today	Сьогодні
+Today: {}	Сьогодні: {}
+This week	Цей тиждень
+Nothing counted yet today.	Сьогодні поки нічого не пораховано.
+Daily limits	Ліміти на день
+When a limit is near you get a warning; when it is reached the app closes.	Коли ліміт близько — прийде попередження; коли вичерпано — програма закриється.
+Add a limit	Додати ліміт
+App:	Програма:
+Minutes a day:	Хвилин на день:
+{} h {} min	{} год {} хв
+{} min	{} хв
+{} min a day	{} хв на день
+What is inside this computer and which driver runs it.	Що всередині комп'ютера і який драйвер цим керує.
+Driver: {}	Драйвер: {}
+No driver in use	Драйвер не використовується
+No devices found.	Пристрої не знайдено.
+Recommended packages	Рекомендовані пакети
+Graphics drivers are installed	Драйвери відеокарти встановлено
+Check again	Перевірити знову
+Firmware	Прошивки
+Updates for BIOS, SSD, touchpad and other parts, from the vendors (fwupd).	Оновлення BIOS, SSD, тачпада та інших частин від виробників (fwupd).
+Firmware updates	Оновлення прошивок
+Install fwupd	Встановити fwupd
+Firmware updates available	Є оновлення прошивок
+Firmware is up to date.	Прошивки актуальні.
+Hourly backups enabled.\n	Щогодинні копії увімкнено.\n
+Automatic backups disabled.\n	Автоматичні копії вимкнено.\n
+the backup drive is not connected	диск для копій не підключено

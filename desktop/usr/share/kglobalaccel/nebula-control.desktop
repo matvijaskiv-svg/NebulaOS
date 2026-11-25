@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Control Center
+Name[ru]=Центр управления
+Name[uk]=Центр керування
+Name[it]=Centro di controllo
+Comment=Quick settings
+Exec=nebula-control
+Icon=preferences-system
+Categories=System;
+NoDisplay=true
+X-KDE-Shortcuts=Meta+C

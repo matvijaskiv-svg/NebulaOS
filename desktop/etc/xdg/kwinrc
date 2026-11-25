@@ -10,6 +10,7 @@ BorderSizeAuto=false
 Placement=Centered
 
 [Plugins]
+nebulascreentimeEnabled=true
 blurEnabled=true
 contrastEnabled=true
 slidingpopupsEnabled=true

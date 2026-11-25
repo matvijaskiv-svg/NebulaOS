@@ -196,6 +196,9 @@ def main():
     a = app("nebula-ai", "nebula-assistant")
     w = Assistant()
     w.show()
+    if "--ask" in sys.argv and sys.argv.index("--ask") + 1 < len(sys.argv):   # question from Spotlight
+        w.entry.setText(sys.argv[sys.argv.index("--ask") + 1])
+        QTimer.singleShot(200, w.send)
     return a.exec()
 
 

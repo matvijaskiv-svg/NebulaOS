@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""Control Center (Super+C): quick settings in the spirit of macOS.
+
+Tiles for Wi-Fi, Bluetooth, Do Not Disturb, Night light and Turbo; volume and
+brightness sliders; the music that is playing; the work mode; battery.
+Closes when it loses focus or with Esc.
+"""
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, QIcon, app, background, run  # noqa: E402
+from PySide6.QtCore import QSize, Qt, QTimer  # noqa: E402
+from PySide6.QtGui import QGuiApplication  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QSlider, QToolButton, QVBoxLayout, QWidget,
+)
+
+
+def sh(*cmd, timeout=5):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def wifi_on():
+    return sh("nmcli", "radio", "wifi") == "enabled"
+
+
+def wifi_name():
+    for line in sh("nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi").splitlines():
+        if line.startswith("yes:"):
+            return line[4:]
+    return ""
+
+
+def bt_on():
+    return "Powered: yes" in sh("bluetoothctl", "show")
+
+
+def dnd_on():
+    return bool(sh("kreadconfig6", "--file", "plasmanotifyrc", "--group", "DoNotDisturb", "--key", "Until"))
+
+
+def night_on():
+    return sh("kreadconfig6", "--file", "kwinrc", "--group", "NightColor", "--key", "Active") == "true"
+
+
+def volume():
+    m = re.search(r"([\d.]+)", sh("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"))
+    return int(float(m.group(1)) * 100) if m else 50
+
+
+def brightness():
+    cur, mx = sh("brightnessctl", "get"), sh("brightnessctl", "max")
+    return int(int(cur) * 100 / int(mx)) if cur.isdigit() and mx.isdigit() and int(mx) else -1
+
+
+def battery():
+    for bat in sorted(Path("/sys/class/power_supply").glob("BAT*")):
+        try:
+            return int((bat / "capacity").read_text()), (bat / "status").read_text().strip()
+        except (OSError, ValueError):
+            pass
+    return None
+
+
+class Tile(QToolButton):
+    """A round-cornered toggle tile: icon, title, small state line."""
+
+    def __init__(self, icon, title, on, callback, sub=""):
+        super().__init__()
+        self.setCheckable(True)
+        self.setChecked(on)
+        self.setIcon(QIcon.fromTheme(icon))
+        self.setIconSize(QSize(22, 22))
+        self.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        self.setText(_(title) + (f"\n{sub}" if sub else ""))
+        self.setMinimumSize(104, 82)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet(
+            "QToolButton { background: palette(base); border: 1px solid palette(midlight); border-radius: 14px;"
+            " padding: 8px; }"
+            "QToolButton:checked { background: palette(highlight); color: palette(highlighted-text); border: none; }")
+        self.toggled.connect(callback)
+
+
+class Control(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowTitle(_("Control Center"))
+        card = QFrame(self)
+        card.setObjectName("cc")
+        card.setStyleSheet("QFrame#cc { background: palette(window); border: 1px solid palette(midlight);"
+                           " border-radius: 18px; }")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(card)
+        v = QVBoxLayout(card)
+        v.setContentsMargins(14, 14, 14, 14)
+        v.setSpacing(12)
+
+        grid = QGridLayout()
+        grid.setSpacing(10)
+        net = wifi_name()
+        tiles = [
+            Tile("network-wireless", "Wi-Fi", wifi_on(), lambda on: run_cmd("nmcli", "radio", "wifi", "on" if on else "off"),
+                 net),
+            Tile("bluetooth-active", "Bluetooth", bt_on(),
+                 lambda on: run_cmd("bluetoothctl", "power", "on" if on else "off")),
+            Tile("notifications-disabled", "Do not disturb", dnd_on(), self.set_dnd),
+            Tile("redshift-status-on", "Night light", night_on(), lambda _on: run("nightlight")),
+            Tile("speedometer", "Turbo", (Path.home() / ".config/nebulaos/.perf").exists(), lambda _on: run("perf")),
+            Tile("system-lock-screen", "Lock", False, lambda _on: (self.hide(), run_cmd("loginctl", "lock-session"))),
+        ]
+        for i, t in enumerate(tiles):
+            grid.addWidget(t, i // 3, i % 3)
+        v.addLayout(grid)
+
+        v.addWidget(self.slider("audio-volume-high", _("Sound"), volume(),
+                                lambda x: run_cmd("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{x}%")))
+        b = brightness()
+        if b >= 0:
+            v.addWidget(self.slider("brightness-high", _("Display"), b,
+                                    lambda x: run_cmd("brightnessctl", "set", f"{max(x, 3)}%")))
+
+        self.media = QFrame()
+        self.media.setStyleSheet("QFrame { background: palette(base); border-radius: 12px; }")
+        mh = QHBoxLayout(self.media)
+        mh.setContentsMargins(12, 8, 8, 8)
+        self.track = QLabel()
+        self.track.setWordWrap(True)
+        mh.addWidget(self.track, 1)
+        for icon, cmd in (("media-skip-backward", "previous"), ("media-playback-pause", "play-pause"),
+                          ("media-skip-forward", "next")):
+            btn = QToolButton()
+            btn.setIcon(QIcon.fromTheme(icon))
+            btn.setAutoRaise(True)
+            btn.clicked.connect(lambda _c=False, c=cmd: (run_cmd("playerctl", c), QTimer.singleShot(400, self.update_media)))
+            mh.addWidget(btn)
+        v.addWidget(self.media)
+        self.update_media()
+
+        modes = QHBoxLayout()
+        current = run("mode", "--current")[1].strip()
+        for key, title in (("gaming", "Gaming"), ("hacking", "Hacking"), ("server", "Server")):
+            mb = QPushButton(_(title))
+            mb.setCheckable(True)
+            mb.setChecked(key == current)
+            mb.clicked.connect(lambda _c=False, k=key: (self.hide(), subprocess.Popen(["nebula", "mode", k])))
+            modes.addWidget(mb)
+        v.addLayout(modes)
+
+        bat = battery()
+        foot = QHBoxLayout()
+        if bat:
+            foot.addWidget(QLabel(f"🔋 {bat[0]}%  ·  {_(bat[1])}"))
+        foot.addStretch(1)
+        settings = QPushButton(_("Settings"))
+        settings.setFlat(True)
+        settings.clicked.connect(lambda: (self.hide(), subprocess.Popen(["nebula-hub"])))
+        foot.addWidget(settings)
+        v.addLayout(foot)
+        self.setFixedWidth(372)
+        self.adjustSize()
+        self.place()
+
+    def slider(self, icon, title, value, callback):
+        w = QFrame()
+        w.setStyleSheet("QFrame { background: palette(base); border-radius: 12px; }")
+        h = QVBoxLayout(w)
+        h.setContentsMargins(12, 8, 12, 10)
+        lbl = QLabel(title)
+        f = lbl.font()
+        f.setBold(True)
+        lbl.setFont(f)
+        h.addWidget(lbl)
+        row = QHBoxLayout()
+        ic = QLabel()
+        ic.setPixmap(QIcon.fromTheme(icon).pixmap(18, 18))
+        s = QSlider(Qt.Horizontal)
+        s.setRange(0, 100)
+        s.setValue(max(0, min(100, value)))
+        s.valueChanged.connect(callback)
+        row.addWidget(ic)
+        row.addWidget(s, 1)
+        h.addLayout(row)
+        return w
+
+    def update_media(self):
+        title = sh("playerctl", "metadata", "--format", "{{artist}} — {{title}}")
+        self.media.setVisible(bool(title))
+        self.track.setText(title)
+
+    def set_dnd(self, on):
+        until = "2099-12-31T00:00:00" if on else ""
+        run_cmd("kwriteconfig6", "--file", "plasmanotifyrc", "--group", "DoNotDisturb", "--key", "Until", until)
+
+    def place(self):
+        screen = QGuiApplication.primaryScreen().availableGeometry()
+        self.move(screen.right() - self.width() - 10, screen.top() + 10)
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Escape:
+            self.close()
+
+    def changeEvent(self, e):
+        if e.type() == e.Type.ActivationChange and not self.isActiveWindow():
+            QTimer.singleShot(150, lambda: None if self.isActiveWindow() else self.close())
+        super().changeEvent(e)
+
+
+def run_cmd(*cmd):
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        pass
+
+
+def main():
+    a = app("nebula-control", "preferences-system")
+    a.setQuitOnLastWindowClosed(True)
+    w = Control()
+    w.show()
+    w.activateWindow()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

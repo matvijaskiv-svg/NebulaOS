@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""Phone (KDE Connect): pair your phone in three steps, then send files, ring it,
+share the clipboard; phone notifications appear on the computer."""
+import re
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, Page, app, background, fit, tile  # noqa: E402
+from PySide6.QtCore import Qt, QTimer  # noqa: E402
+from PySide6.QtWidgets import QFileDialog, QLabel, QMainWindow, QMessageBox  # noqa: E402
+
+ANDROID = "https://play.google.com/store/apps/details?id=org.kde.kdeconnect_tp"
+FDROID = "https://f-droid.org/packages/org.kde.kdeconnect_tp/"
+IOS = "https://apps.apple.com/app/kde-connect/id1580245991"
+
+
+def kc(*args, timeout=10):
+    try:
+        return subprocess.run(["kdeconnect-cli", *args], capture_output=True, text=True, timeout=timeout).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def devices():
+    """[(id, name, paired, reachable)]"""
+    kc("--refresh", timeout=5)
+    out = []
+    for line in kc("-l").splitlines():
+        m = re.match(r"^- (.+?): (\S+) \((.*)\)", line)
+        if m:
+            state = m.group(3)
+            out.append((m.group(2), m.group(1), "paired" in state and "unpaired" not in state, "reachable" in state))
+    return out
+
+
+class Phone(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("Phone"))
+        self.devs = None
+        self.signature = None
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.poll)
+        self.timer.start(4000)
+        self.render()
+        self.poll()
+        fit(self, 820, 660)
+
+    def poll(self):
+        background(devices, self.got)
+
+    def got(self, devs):
+        devs = devs if isinstance(devs, list) else []
+        sig = repr(devs)
+        if sig != self.signature:
+            self.signature, self.devs = sig, devs
+            self.render()
+
+    def render(self):
+        p = Page("Phone", "Your phone and this computer work together: notifications, files, clipboard.")
+        paired = [d for d in (self.devs or []) if d[2]]
+        if not paired:
+            s1 = p.group("1. Install KDE Connect on the phone")
+            for name, url in (("Android — Google Play", ANDROID), ("Android — F-Droid", FDROID), ("iPhone — App Store", IOS)):
+                s1.action(name, url, "Open link", lambda u=url: subprocess.Popen(["xdg-open", u]))
+            s2 = p.group("2. Connect both to the same Wi-Fi", "Open KDE Connect on the phone; the phone appears below.")
+            if self.devs is None:
+                s2.widget(QLabel(_("Searching…")))
+            elif not self.devs:
+                s2.widget(QLabel(_("No phone found yet.")))
+            for did, name, _p, reachable in self.devs or []:
+                s2.action(name, _("nearby") if reachable else _("not nearby"), "Pair",
+                          lambda d=did: self.pair(d), primary=reachable)
+            p.group("3. Accept on the phone", "Confirm the pairing request on the phone.")
+        for did, name, _p, reachable in paired:
+            g = p.group(name, _("Connected") if reachable else _("Not nearby — open KDE Connect on the phone"))
+            g.action("Send files", "", "Choose…", lambda d=did: self.send(d))
+            g.action("Find my phone", "It rings loudly, even in silent mode", "Ring",
+                     lambda d=did: kc("--ring", "-d", d))
+            g.action("Send the clipboard", "", "Send", lambda d=did: kc("--send-clipboard", "-d", d))
+            g.action("Unpair", "", "Unpair", lambda d=did: (kc("--unpair", "-d", d), self.poll()))
+        more = p.group()
+        more.action("All KDE Connect settings", "Remote input, media control, battery, shared folders", "Open",
+                    lambda: subprocess.Popen(["kdeconnect-app"]))
+        self.setCentralWidget(p)
+
+    def pair(self, did):
+        kc("--pair", "-d", did)
+        QMessageBox.information(self, _("Phone"), _("Now confirm the request on the phone."))
+
+    def send(self, did):
+        files, _f = QFileDialog.getOpenFileNames(self, _("Send files"))
+        for f in files:
+            kc("--share", f, "-d", did, timeout=60)
+
+
+def main():
+    a = app("nebula-phone", "smartphone")
+    w = Phone()
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

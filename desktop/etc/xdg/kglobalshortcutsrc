@@ -27,3 +27,9 @@ Window Minimize=Meta+Down,Meta+PgDown,Minimize Window
 
 [services][nebula-keys.desktop]
 _launch=Meta+/
+
+[services][nebula-control.desktop]
+_launch=Meta+C
+
+[services][nebula-spotlight.desktop]
+_launch=Meta+Space

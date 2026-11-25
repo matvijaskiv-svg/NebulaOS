@@ -10,9 +10,12 @@ bar.addWidget("org.kde.plasma.panelspacer");
 safe(function () {
     var cpu = bar.addWidget("org.kde.plasma.systemmonitor.cpu");
 });
+addControlButton(bar);
 bar.addWidget("org.kde.plasma.systemtray");
 addClock(bar, true);
 bar.addWidget("org.kde.plasma.showdesktop");
+
+desktopWidgets([["org.kde.plasma.systemmonitor.cpu", 200], ["org.kde.plasma.systemmonitor.memory", 200], ["org.kde.plasma.mediacontroller", 180]]);
 
 // Lock the layout again: users cannot edit panels (NebulaOS can, through scripting).
 panels().forEach(function (p) { safe(function () { p.locked = true; }); });

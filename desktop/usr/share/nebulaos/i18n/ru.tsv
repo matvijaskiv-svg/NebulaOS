@@ -223,7 +223,7 @@ Memory and storage	Память и хранилище
 Quick settings	Быстрые настройки
 Power profile	Профиль питания
 Connected network	Подключённая сеть
-Not connected	Не подключено
+Not connected	Не подключён
 Network settings…	Настройки сети…
 Nearby networks	Сети поблизости
 Choose a network in Network settings to enter its password.	Чтобы ввести пароль, выберите сеть в настройках сети.
@@ -843,3 +843,85 @@ Containers: {}	Контейнеров: {}
 Up for {} h {} min	Работает {} ч {} мин
 running	работает
 stopped	остановлена
+Control Center	Центр управления
+Search everything	Поиск по всему
+Do not disturb	Не беспокоить
+Lock	Блокировка
+Mode: Gaming	Режим: Гейминг
+Mode: Hacking	Режим: Хакинг
+Mode: Server	Режим: Сервер
+Shut down	Выключить
+Search apps, files, or type 2+2…	Программы, файлы или пример: 2+2…
+App	Программа
+Ask the assistant: “{}”	Спросить ассистента: «{}»
+Search the web: “{}”	Искать в интернете: «{}»
+Copies of your home folder on another drive. Every copy keeps its date; unchanged files take no extra space.	Копии вашей домашней папки на другом диске. У каждой копии своя дата; неизменённые файлы не занимают лишнего места.
+Backup drive	Диск для копий
+Not chosen	Не выбран
+Connected	Подключён
+Choose a USB drive or a disk	Выберите флешку или диск
+USB drive	Флешка
+Use	Использовать
+Free on the drive: {} GB of {} GB	Свободно на диске: {} ГБ из {} ГБ
+Back up automatically every hour	Делать копию каждый час автоматически
+Only while the drive is connected	Только пока диск подключён
+Copies	Копии
+No copies yet.	Копий пока нет.
+Last copy: {}	Последняя копия: {}
+Restore a file…	Восстановить файл…
+Choose a file to bring back	Выберите файл для восстановления
+{} already exists. Keep both?	{} уже есть. Оставить оба?
+restored	восстановлен
+Restored: {}	Восстановлено: {}
+Backup finished	Резервная копия готова
+Phone	Телефон
+Your phone and this computer work together: notifications, files, clipboard.	Телефон и компьютер работают вместе: уведомления, файлы, буфер обмена.
+1. Install KDE Connect on the phone	1. Установите KDE Connect на телефон
+2. Connect both to the same Wi-Fi	2. Подключите оба к одной Wi-Fi сети
+Open KDE Connect on the phone; the phone appears below.	Откройте KDE Connect на телефоне — он появится ниже.
+3. Accept on the phone	3. Подтвердите на телефоне
+Confirm the pairing request on the phone.	Подтвердите запрос на сопряжение на телефоне.
+Open link	Открыть ссылку
+Pair	Подключить
+nearby	рядом
+not nearby	не рядом
+No phone found yet.	Телефон пока не найден.
+Not nearby — open KDE Connect on the phone	Не рядом — откройте KDE Connect на телефоне
+Send files	Отправить файлы
+Find my phone	Найти телефон
+It rings loudly, even in silent mode	Он громко зазвонит, даже в беззвучном режиме
+Ring	Позвонить
+Send the clipboard	Отправить буфер обмена
+Unpair	Отключить
+Now confirm the request on the phone.	Теперь подтвердите запрос на телефоне.
+All KDE Connect settings	Все настройки KDE Connect
+Remote input, media control, battery, shared folders	Пульт, управление музыкой, батарея, общие папки
+Screen time	Экранное время
+Today	Сегодня
+Today: {}	Сегодня: {}
+This week	Эта неделя
+Nothing counted yet today.	Сегодня пока ничего не посчитано.
+Daily limits	Лимиты на день
+When a limit is near you get a warning; when it is reached the app closes.	Когда лимит близко — придёт предупреждение; когда исчерпан — программа закроется.
+Add a limit	Добавить лимит
+App:	Программа:
+Minutes a day:	Минут в день:
+{} h {} min	{} ч {} мин
+{} min	{} мин
+{} min a day	{} мин в день
+What is inside this computer and which driver runs it.	Что внутри компьютера и какой драйвер этим управляет.
+Driver: {}	Драйвер: {}
+No driver in use	Драйвер не используется
+No devices found.	Устройства не найдены.
+Recommended packages	Рекомендуемые пакеты
+Graphics drivers are installed	Драйверы видеокарты установлены
+Check again	Проверить снова
+Firmware	Прошивки
+Updates for BIOS, SSD, touchpad and other parts, from the vendors (fwupd).	Обновления BIOS, SSD, тачпада и других частей от производителей (fwupd).
+Firmware updates	Обновления прошивок
+Install fwupd	Установить fwupd
+Firmware updates available	Есть обновления прошивок
+Firmware is up to date.	Прошивки актуальны.
+Hourly backups enabled.\n	Ежечасные копии включены.\n
+Automatic backups disabled.\n	Автоматические копии выключены.\n
+the backup drive is not connected	диск для копий не подключён

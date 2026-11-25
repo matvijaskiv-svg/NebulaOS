@@ -1,0 +1,239 @@
+#!/usr/bin/env python3
+"""Spotlight (Super+Space): one box for apps, files, a calculator, NebulaOS
+actions, the assistant and web search. Arrows to choose, Enter to open, Esc to close."""
+import ast
+import configparser
+import operator
+import os
+import shutil
+import subprocess
+import sys
+import urllib.parse
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, QIcon, app, background  # noqa: E402
+from PySide6.QtCore import QSize, Qt, QTimer  # noqa: E402
+from PySide6.QtGui import QGuiApplication  # noqa: E402
+from PySide6.QtWidgets import QFrame, QLabel, QLineEdit, QListWidget, QListWidgetItem, QVBoxLayout, QWidget  # noqa: E402
+
+APP_DIRS = [Path.home() / ".local/share/applications", Path("/usr/local/share/applications"),
+            Path("/usr/share/applications"), Path.home() / ".local/share/flatpak/exports/share/applications",
+            Path("/var/lib/flatpak/exports/share/applications")]
+ACTIONS = [  # (words to match, title, icon, command)
+    ("gaming game mode гейминг игры ігри", "Mode: Gaming", "input-gaming", ["nebula", "mode", "gaming"]),
+    ("hacking mode хакинг хакінг", "Mode: Hacking", "utilities-terminal", ["nebula", "mode", "hacking"]),
+    ("server mode сервер", "Mode: Server", "network-server", ["nebula", "mode", "server"]),
+    ("update обновить оновити aggiorna", "Update the system", "system-software-update",
+     ["konsole", "--profile", "Nebula", "-e", "nebula", "update"]),
+    ("clean очистить очистити pulizia space место", "Clean up", "edit-clear-all",
+     ["konsole", "--profile", "Nebula", "-e", "nebula", "clean"]),
+    ("doctor check проверка перевірка", "System check", "dialog-ok", ["konsole", "--profile", "Nebula", "-e", "nebula", "doctor"]),
+    ("lock блок blocca", "Lock the screen", "system-lock-screen", ["loginctl", "lock-session"]),
+    ("night ночь нічний notte", "Night light", "redshift-status-on", ["nebula", "nightlight"]),
+    ("turbo fps турбо", "Turbo mode", "speedometer", ["nebula", "perf"]),
+    ("screenshot скриншот знімок", "Screenshot of an area", "spectacle", ["spectacle", "-r"]),
+    ("settings настройки налаштування impostazioni", "Settings", "nebula-settings", ["nebula-hub"]),
+    ("store app магазин negozio", "App Store", "nebula-store", ["nebula-store"]),
+    ("shutdown power off выключить вимкнути spegni", "Shut down", "system-shutdown", ["systemctl", "poweroff"]),
+    ("reboot restart перезагрузка перезавантажити riavvia", "Restart", "system-reboot", ["systemctl", "reboot"]),
+]
+OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
+       ast.Pow: operator.pow, ast.Mod: operator.mod, ast.USub: operator.neg, ast.UAdd: operator.pos}
+
+
+def calc(text):
+    """Safe arithmetic: numbers, + - * / % ** and parentheses only."""
+    expr = text.replace(",", ".").replace("×", "*").replace("÷", "/").replace("^", "**").strip().rstrip("=")
+    if not expr or not any(c.isdigit() for c in expr) or not any(c in expr for c in "+-*/%()"):
+        return None
+
+    def ev(node):
+        if isinstance(node, ast.Expression):
+            return ev(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return node.value
+        if isinstance(node, ast.BinOp) and type(node.op) in OPS:
+            if isinstance(node.op, ast.Pow) and abs(ev(node.right)) > 100:
+                raise ValueError
+            return OPS[type(node.op)](ev(node.left), ev(node.right))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in OPS:
+            return OPS[type(node.op)](ev(node.operand))
+        raise ValueError
+    try:
+        value = ev(ast.parse(expr, mode="eval"))
+    except (ValueError, SyntaxError, ZeroDivisionError, OverflowError, TypeError):
+        return None
+    return f"{value:,.10g}".replace(",", " ") if isinstance(value, float) else f"{value:,}".replace(",", " ")
+
+
+def load_apps():
+    lang = (os.environ.get("LANG") or "en")[:2]
+    apps, seen = [], set()
+    for d in APP_DIRS:
+        for f in sorted(d.glob("*.desktop")) if d.exists() else []:
+            if f.name in seen:
+                continue
+            seen.add(f.name)
+            c = configparser.ConfigParser(interpolation=None, strict=False)
+            try:
+                c.read(f, encoding="utf-8")
+                e = c["Desktop Entry"]
+            except (configparser.Error, KeyError, UnicodeDecodeError):
+                continue
+            if e.get("NoDisplay", "false") == "true" or e.get("Hidden", "false") == "true" or e.get("Type") != "Application":
+                continue
+            name = e.get(f"Name[{lang}]") or e.get("Name", f.stem)
+            words = " ".join([name, e.get("Name", ""), e.get("GenericName", ""), e.get(f"GenericName[{lang}]", ""),
+                              e.get("Keywords", ""), e.get(f"Keywords[{lang}]", "")]).lower()
+            apps.append((name, e.get("Icon", "application-x-executable"), str(f), words))
+    return apps
+
+
+def find_files(text):
+    if shutil.which("baloosearch6"):
+        out = subprocess.run(["baloosearch6", "-l", "8", text], capture_output=True, text=True, timeout=4).stdout
+        return [l for l in out.splitlines() if l.startswith("/")][:8]
+    out = subprocess.run(["find", str(Path.home()), "-maxdepth", "4", "-iname", f"*{text}*", "-not", "-path", "*/.*"],
+                         capture_output=True, text=True, timeout=4).stdout
+    return out.splitlines()[:8]
+
+
+class Spotlight(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowTitle("Spotlight")
+        self.apps = load_apps()
+        card = QFrame(self)
+        card.setObjectName("sp")
+        card.setStyleSheet("QFrame#sp { background: palette(window); border: 1px solid palette(midlight);"
+                           " border-radius: 16px; }"
+                           "QListWidget { background: transparent; border: none; outline: none; }"
+                           "QListWidget::item { padding: 6px 8px; border-radius: 8px; }"
+                           "QListWidget::item:selected { background: palette(highlight); color: palette(highlighted-text); }")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(card)
+        v = QVBoxLayout(card)
+        v.setContentsMargins(12, 12, 12, 12)
+        self.entry = QLineEdit()
+        self.entry.setPlaceholderText(_("Search apps, files, or type 2+2…"))
+        f = self.entry.font()
+        f.setPointSizeF(f.pointSizeF() * 1.5)
+        self.entry.setFont(f)
+        self.entry.setStyleSheet("QLineEdit { border: none; background: transparent; padding: 6px; }")
+        self.entry.textChanged.connect(self.search)
+        self.entry.returnPressed.connect(self.open_current)
+        v.addWidget(self.entry)
+        self.list = QListWidget()
+        self.list.setIconSize(QSize(28, 28))
+        self.list.itemActivated.connect(lambda _i: self.open_current())
+        self.list.hide()
+        v.addWidget(self.list)
+        self.setFixedWidth(680)
+        self.file_timer = QTimer(self)
+        self.file_timer.setSingleShot(True)
+        self.file_timer.timeout.connect(self.search_files)
+        self.adjustSize()
+        self.place()
+
+    def place(self):
+        g = QGuiApplication.primaryScreen().availableGeometry()
+        self.move(g.center().x() - self.width() // 2, g.top() + int(g.height() * 0.22))
+
+    def add(self, icon, title, sub, action):
+        item = QListWidgetItem(QIcon.fromTheme(icon, QIcon.fromTheme("application-x-executable")),
+                               title + (f"   —   {sub}" if sub else ""))
+        item.setData(Qt.UserRole, action)
+        self.list.addItem(item)
+
+    def search(self, text):
+        q = text.strip().lower()
+        self.list.clear()
+        if not q:
+            self.list.hide()
+            self.adjustSize()
+            return
+        result = calc(text)
+        if result is not None:
+            self.add("accessories-calculator", f"= {result}", _("Copy"), ("copy", result.replace(" ", "")))
+        hits = [a for a in self.apps if q in a[3]]
+        hits.sort(key=lambda a: (not a[0].lower().startswith(q), a[0].lower()))
+        for name, icon, path, _w in hits[:6]:
+            self.add(icon, name, _("App"), ("app", path))
+        for words, title, icon, cmd in ACTIONS:
+            if any(w.startswith(q) or q in w for w in words.split()) or q in _(title).lower():
+                self.add(icon, _(title), "NebulaOS", ("run", cmd))
+        self.add("nebula-assistant", _("Ask the assistant: “{}”").format(text.strip()), "", ("ask", text.strip()))
+        self.add("internet-web-browser", _("Search the web: “{}”").format(text.strip()), "", ("web", text.strip()))
+        self.list.setCurrentRow(0)
+        self.list.show()
+        self.list.setFixedHeight(min(self.list.count(), 9) * 42 + 8)
+        self.adjustSize()
+        if len(q) >= 3:
+            self.file_timer.start(250)
+
+    def search_files(self):
+        q = self.entry.text().strip()
+
+        def got(paths):
+            if self.entry.text().strip() != q or not isinstance(paths, list):
+                return
+            row = self.list.count() - 2
+            for p in paths:
+                item = QListWidgetItem(QIcon.fromTheme("folder" if Path(p).is_dir() else "text-x-generic"),
+                                       f"{Path(p).name}   —   {str(Path(p).parent).replace(str(Path.home()), '~')}")
+                item.setData(Qt.UserRole, ("file", p))
+                self.list.insertItem(row, item)
+                row += 1
+            self.list.setFixedHeight(min(self.list.count(), 9) * 42 + 8)
+            self.adjustSize()
+        background(lambda: find_files(q), got)
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Escape:
+            self.close()
+        elif e.key() in (Qt.Key_Down, Qt.Key_Up) and self.list.count():
+            row = self.list.currentRow() + (1 if e.key() == Qt.Key_Down else -1)
+            self.list.setCurrentRow(max(0, min(row, self.list.count() - 1)))
+        else:
+            super().keyPressEvent(e)
+
+    def open_current(self):
+        item = self.list.currentItem()
+        if not item:
+            return
+        kind, value = item.data(Qt.UserRole)
+        if kind == "copy":
+            QGuiApplication.clipboard().setText(value)
+        elif kind == "app":
+            subprocess.Popen(["kioclient", "exec", value])
+        elif kind == "run":
+            subprocess.Popen(value)
+        elif kind == "file":
+            subprocess.Popen(["xdg-open", value])
+        elif kind == "ask":
+            subprocess.Popen(["nebula-ai-overlay", "--ask", value])
+        elif kind == "web":
+            subprocess.Popen(["xdg-open", "https://duckduckgo.com/?q=" + urllib.parse.quote(value)])
+        QTimer.singleShot(150 if kind == "copy" else 0, self.close)
+
+    def changeEvent(self, e):
+        if e.type() == e.Type.ActivationChange and not self.isActiveWindow():
+            QTimer.singleShot(150, lambda: None if self.isActiveWindow() else self.close())
+        super().changeEvent(e)
+
+
+def main():
+    a = app("nebula-spotlight", "system-search")
+    w = Spotlight()
+    w.show()
+    w.activateWindow()
+    w.entry.setFocus()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

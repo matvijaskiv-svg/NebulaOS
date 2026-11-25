@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Screen time: how long each app was in front today and this week, with daily limits."""
+import json
+import os
+import sys
+from datetime import date, timedelta
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, Page, app, fit  # noqa: E402
+from PySide6.QtCore import QRectF, Qt  # noqa: E402
+from PySide6.QtGui import QColor, QFont, QPainter  # noqa: E402
+from PySide6.QtWidgets import QHBoxLayout, QInputDialog, QLabel, QMainWindow, QWidget  # noqa: E402
+
+DATA = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "nebulaos/screentime"
+LIMITS = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "nebulaos/screentime-limits.json"
+
+
+def day_usage(d):
+    try:
+        return json.loads((DATA / f"{d.isoformat()}.json").read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def hm(seconds):
+    m = int(seconds // 60)
+    return _("{} h {} min").format(m // 60, m % 60) if m >= 60 else _("{} min").format(m)
+
+
+def limits():
+    try:
+        return json.loads(LIMITS.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def save_limits(d):
+    LIMITS.parent.mkdir(parents=True, exist_ok=True)
+    LIMITS.write_text(json.dumps(d))
+
+
+class Bar(QWidget):
+    """One app row: name, a bar relative to the top app, time."""
+
+    def __init__(self, name, seconds, top, limit=None):
+        super().__init__()
+        self.name, self.seconds, self.top, self.limit = name, seconds, max(top, 1), limit
+        self.setMinimumHeight(30)
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        r = self.rect()
+        p.setPen(self.palette().text().color())
+        p.drawText(QRectF(0, 0, 170, r.height()), Qt.AlignVCenter | Qt.AlignLeft, self.name)
+        width = (r.width() - 360) * self.seconds / self.top
+        p.setPen(Qt.NoPen)
+        p.setBrush(self.palette().alternateBase())
+        p.drawRoundedRect(QRectF(180, r.height() / 2 - 5, r.width() - 360, 10), 5, 5)
+        over = self.limit and self.seconds / 60 >= self.limit
+        p.setBrush(QColor("#e5484d") if over else self.palette().highlight())
+        p.drawRoundedRect(QRectF(180, r.height() / 2 - 5, max(width, 6), 10), 5, 5)
+        p.setPen(self.palette().text().color())
+        label = hm(self.seconds) + (f"  / {self.limit} min" if self.limit else "")
+        p.drawText(QRectF(r.width() - 170, 0, 170, r.height()), Qt.AlignVCenter | Qt.AlignRight, label)
+        p.end()
+
+
+class Week(QWidget):
+    def __init__(self, days):
+        super().__init__()
+        self.days = days
+        self.setMinimumHeight(170)
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        r = self.rect()
+        top = max([s for _d, s in self.days] + [3600])
+        n = len(self.days)
+        slot = r.width() / n
+        f = QFont(self.font())
+        f.setPointSizeF(f.pointSizeF() * 0.85)
+        p.setFont(f)
+        for i, (d, s) in enumerate(self.days):
+            h = (r.height() - 40) * s / top
+            x = i * slot + slot * 0.25
+            p.setPen(Qt.NoPen)
+            p.setBrush(self.palette().highlight() if i == n - 1 else self.palette().mid())
+            p.drawRoundedRect(QRectF(x, r.height() - 24 - h, slot * 0.5, max(h, 3)), 5, 5)
+            p.setPen(self.palette().text().color())
+            p.drawText(QRectF(i * slot, r.height() - 20, slot, 20), Qt.AlignCenter, d.strftime("%a"))
+            if s:
+                p.drawText(QRectF(i * slot, r.height() - 42 - h, slot, 16), Qt.AlignCenter, f"{s / 3600:.1f}h")
+        p.end()
+
+
+class ScreenTime(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("Screen time"))
+        self.build()
+        fit(self, 860, 720)
+
+    def build(self):
+        today = date.today()
+        usage = day_usage(today)
+        lim = limits()
+        total = sum(usage.values())
+        p = Page("Screen time", _("Today: {}").format(hm(total)))
+        g = p.group("Today")
+        apps = sorted(usage.items(), key=lambda kv: -kv[1])[:12]
+        if not apps:
+            g.widget(QLabel(_("Nothing counted yet today.")))
+        top = apps[0][1] if apps else 1
+        for name, secs in apps:
+            g.widget(Bar(name, secs, top, lim.get(name)))
+        w = p.group("This week")
+        days = [(today - timedelta(days=i), sum(day_usage(today - timedelta(days=i)).values())) for i in range(6, -1, -1)]
+        w.widget(Week(days))
+        lg = p.group("Daily limits", "When a limit is near you get a warning; when it is reached the app closes.")
+        for name, minutes in sorted(lim.items()):
+            lg.action(name, _("{} min a day").format(minutes), "Remove", lambda n=name: self.remove_limit(n))
+        lg.action("Add a limit", "", "Add…", lambda: self.add_limit([n for n, _s in apps]), primary=True)
+        self.setCentralWidget(p)
+
+    def add_limit(self, names):
+        name, ok = QInputDialog.getItem(self, _("Daily limits"), _("App:"), names or ["steam"], 0, True)
+        if not ok or not name.strip():
+            return
+        minutes, ok = QInputDialog.getInt(self, _("Daily limits"), _("Minutes a day:"), 120, 5, 1440, 5)
+        if ok:
+            d = limits()
+            d[name.strip().lower()] = minutes
+            save_limits(d)
+            self.build()
+
+    def remove_limit(self, name):
+        d = limits()
+        d.pop(name, None)
+        save_limits(d)
+        self.build()
+
+
+def main():
+    a = app("nebula-screentime", "chronometer")
+    w = ScreenTime()
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Phone
+Name[ru]=Телефон
+Name[uk]=Телефон
+Name[it]=Telefono
+Comment=Pair your phone
+Exec=nebula-phone
+Icon=smartphone
+Categories=Network;

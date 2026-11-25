@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Screen time
+Name[ru]=Экранное время
+Name[uk]=Екранний час
+Name[it]=Tempo di utilizzo
+Comment=Time in apps and daily limits
+Exec=nebula-screentime
+Icon=chronometer
+Categories=System;

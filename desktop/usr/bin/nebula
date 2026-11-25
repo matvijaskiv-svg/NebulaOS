@@ -482,29 +482,38 @@ cmd_template() {
 
 # ---------- Home folder backups ----------
 cmd_backup() {
-  local dest_file=$CONF/backup-dest dest units=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
+  # Time Machine style: dated snapshots on a drive; unchanged files are hard links (no extra space).
+  local dest_file=$CONF/backup-dest root snap units=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
   case ${1:-run} in
     set)
       [[ -d ${2:-} ]] || die "$(t 'backup set <folder or mounted drive>')"
       install -d "$CONF"; realpath -- "$2" > "$dest_file"; printf "$(t 'Backups will go to: %s\n')" "$(cat "$dest_file")" ;;
     run)
       [[ -r $dest_file ]] || die "$(t 'first run: nebula backup set <folder>')"
-      dest=$(cat "$dest_file")/$(hostname)-$USER
-      install -d "$dest"
-      rsync -a --delete --info=progress2 --exclude '.cache/' --exclude 'Downloads/' --exclude '.local/share/Steam/' \
-        "$HOME/" "$dest/home/"
-      date '+%F %R' > "$dest/last-backup"
-      notify-send -a NebulaOS "Backup finished: $dest" 2>/dev/null || true ;;
+      [[ -d $(cat "$dest_file") ]] || { [[ ${2:-} == --quiet ]] && return 0; die "$(t 'the backup drive is not connected')"; }
+      root=$(cat "$dest_file")/NebulaOS-Backups/$(hostname)-$USER
+      snap=$root/$(date +%F_%H%M)
+      install -d "$snap"
+      local link=(); [[ -d $root/latest/ ]] && link=(--link-dest="$root/latest/")
+      rsync -a --delete --info=progress2 "${link[@]}" --exclude '.cache/' --exclude 'Downloads/' \
+        --exclude '.local/share/Steam/' --exclude '.var/app/*/cache/' --exclude '.local/share/Trash/' \
+        "$HOME/" "$snap/" || true
+      ln -sfn "$(basename "$snap")" "$root/latest"
+      # keep the 60 newest snapshots
+      ls -1d "$root"/20??-??-??_???? 2>/dev/null | sort | head -n -60 | xargs -r rm -rf
+      date '+%F %R' > "$root/last-backup"
+      notify-send -a NebulaOS -i drive-harddisk "$(t 'Backup finished')" "$snap" 2>/dev/null || true ;;
     auto)
       case ${2:-} in
         on)
           install -d "$units"
-          printf '[Unit]\nDescription=NebulaOS backup\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/nebula backup run\n' > "$units/nebula-backup.service"
-          printf '[Unit]\nDescription=NebulaOS daily backup\n\n[Timer]\nOnCalendar=daily\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n' > "$units/nebula-backup.timer"
+          printf '[Unit]\nDescription=NebulaOS backup\n\n[Service]\nType=oneshot\nNice=10\nIOSchedulingClass=idle\nExecStart=/usr/bin/nebula backup run --quiet\n' > "$units/nebula-backup.service"
+          printf '[Unit]\nDescription=NebulaOS hourly backup\n\n[Timer]\nOnCalendar=hourly\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n' > "$units/nebula-backup.timer"
           systemctl --user daemon-reload && systemctl --user enable --now nebula-backup.timer
-          printf "$(t 'Daily backups enabled.\n')" ;;
-        off) systemctl --user disable --now nebula-backup.timer 2>/dev/null; printf "$(t 'Daily backups disabled.\n')" ;;
-        *) die "$(t 'backup auto on|off')" ;;
+          printf "$(t 'Hourly backups enabled.\n')" ;;
+        off) systemctl --user disable --now nebula-backup.timer 2>/dev/null; printf "$(t 'Automatic backups disabled.\n')" ;;
+        status) systemctl --user is-enabled nebula-backup.timer 2>/dev/null || echo disabled ;;
+        *) die "$(t 'backup auto on|off|status')" ;;
       esac ;;
     *) die "$(t 'backup set <folder> | run | auto on|off')" ;;
   esac
@@ -601,6 +610,8 @@ cmd_keys() {
   local text
   text="Super — $(t 'Apps menu')
 Super+H — $(t 'NebulaOS Settings')
+Super+Space — $(t 'Search everything')
+Super+C — $(t 'Control Center')
 Super+A — Nebula AI
 Super+M — $(t 'Switch mode')
 Super+Shift+A — Nebula Store

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Drivers
+Name[ru]=Драйверы
+Name[uk]=Драйвери
+Name[it]=Driver
+Comment=Devices, drivers and firmware
+Exec=nebula-drivers
+Icon=preferences-system
+Categories=System;Settings;

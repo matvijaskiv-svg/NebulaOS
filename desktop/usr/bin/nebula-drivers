@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""Drivers: every device with the driver in use, recommended graphics packages
+installed in one click, and firmware updates (fwupd)."""
+import re
+import shutil
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, Page, app, background, fit, in_terminal  # noqa: E402
+from PySide6.QtWidgets import QLabel, QMainWindow  # noqa: E402
+
+KINDS = [  # (lspci class pattern, title, icon)
+    (r"VGA|3D|Display", "Graphics"),
+    (r"Network controller|Wireless", "Wi-Fi"),
+    (r"Ethernet", "Ethernet"),
+    (r"Audio|Multimedia", "Sound"),
+    (r"Bluetooth", "Bluetooth"),
+]
+
+
+def sh(*cmd, timeout=20):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def devices():
+    """[(kind, name, driver)] from lspci -k (and lsusb for USB Bluetooth)."""
+    out, blocks = [], sh("lspci", "-k").split("\n0")
+    for b in blocks:
+        head = b.split("\n", 1)[0]
+        for pattern, kind in KINDS:
+            if re.search(pattern, head, re.I):
+                name = head.split(": ", 1)[-1].strip()
+                m = re.search(r"Kernel driver in use: (\S+)", b)
+                out.append((kind, name, m.group(1) if m else ""))
+                break
+    for line in sh("lsusb").splitlines():
+        if "bluetooth" in line.lower():
+            out.append(("Bluetooth", line.split(" ", 6)[-1], "btusb"))
+    return out
+
+
+def recommended(gpu_names):
+    names = " ".join(gpu_names)
+    multilib = "multilib" in sh("pacman-conf", "--repo-list").split()
+    pkgs = []
+    if re.search(r"nvidia", names, re.I):
+        pkgs += ["nvidia-open", "nvidia-utils", "nvidia-settings"] + (["lib32-nvidia-utils"] if multilib else [])
+    if re.search(r"AMD|ATI|Radeon", names, re.I):
+        pkgs += ["mesa", "vulkan-radeon"] + (["lib32-mesa", "lib32-vulkan-radeon"] if multilib else [])
+    if re.search(r"Intel", names, re.I):
+        pkgs += ["mesa", "vulkan-intel", "intel-media-driver"] + (["lib32-mesa", "lib32-vulkan-intel"] if multilib else [])
+    have = set(sh("pacman", "-Qq").split())
+    return [p for p in dict.fromkeys(pkgs) if p not in have]
+
+
+class Drivers(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("Drivers"))
+        self.firmware = None
+        self.build()
+        background(lambda: sh("fwupdmgr", "get-updates", "--no-unreported-check", timeout=60)
+                   if shutil.which("fwupdmgr") else "", self.got_fw)
+        fit(self, 860, 680)
+
+    def got_fw(self, text):
+        self.firmware = text if isinstance(text, str) else ""
+        self.build()
+
+    def build(self):
+        p = Page("Drivers", "What is inside this computer and which driver runs it.")
+        devs = devices()
+        g = p.group("Devices")
+        for kind, name, driver in devs:
+            g.action(f"{_(kind)}: {name}", _("Driver: {}").format(driver) if driver else _("No driver in use"),
+                     "OK" if driver else "Help", (lambda: None) if driver else
+                     (lambda: subprocess.Popen(["xdg-open", "https://wiki.archlinux.org/title/Hardware"])))
+        if not devs:
+            g.widget(QLabel(_("No devices found.")))
+        gpus = [n for k, n, _d in devs if k == "Graphics"]
+        missing = recommended(gpus)
+        r = p.group("Graphics")
+        if missing:
+            r.action("Recommended packages", " ".join(missing), "Install",
+                     lambda: in_terminal("sudo", "pacman", "-S", "--needed", *missing), primary=True)
+        else:
+            r.action("Graphics drivers are installed", "", "Check again", self.build)
+        f = p.group("Firmware", "Updates for BIOS, SSD, touchpad and other parts, from the vendors (fwupd).")
+        if not shutil.which("fwupdmgr"):
+            f.action("Firmware updates", "", "Install fwupd", lambda: in_terminal("sudo", "pacman", "-S", "--needed", "fwupd"))
+        elif self.firmware is None:
+            f.widget(QLabel(_("Checking…")))
+        elif "No updates" in self.firmware or not self.firmware.strip():
+            f.widget(QLabel(_("Firmware is up to date.")))
+        else:
+            f.action("Firmware updates available", "", "Update",
+                     lambda: in_terminal("sudo", "fwupdmgr", "update"), primary=True)
+        self.setCentralWidget(p)
+
+
+def main():
+    a = app("nebula-drivers", "preferences-system")
+    w = Drivers()
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

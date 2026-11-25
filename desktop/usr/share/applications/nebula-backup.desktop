@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Backups
+Name[ru]=Резервные копии
+Name[uk]=Резервні копії
+Name[it]=Backup
+Comment=Time Machine style backups
+Exec=nebula-backup
+Icon=drive-harddisk
+Categories=System;

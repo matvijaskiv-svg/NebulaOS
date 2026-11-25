@@ -1,0 +1,14 @@
+{
+    "KPlugin": {
+        "Id": "nebulascreentime",
+        "Name": "NebulaOS screen time",
+        "Description": "Tells NebulaOS which app is in front, for Screen time",
+        "Authors": [{"Name": "NebulaOS"}],
+        "License": "GPL-2.0-or-later",
+        "Version": "1.0",
+        "EnabledByDefault": true
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js",
+    "KPackageStructure": "KWin/Script"
+}

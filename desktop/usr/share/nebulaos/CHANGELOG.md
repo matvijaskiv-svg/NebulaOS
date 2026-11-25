@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.9.0
+- New: Control Center (Super+C), Spotlight (Super+Space), Time Machine style Backups, Phone pairing, Screen time with limits, Drivers app, desktop widgets for each mode
+
 ## 0.8.2
 - Fixes: window buttons visible again, icons in Server mode, panels locked, no GRUB theme error at boot, no keyboard error after updates, clearer update text
 

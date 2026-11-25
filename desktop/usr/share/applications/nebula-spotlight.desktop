@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Spotlight
+Name[ru]=Поиск
+Name[uk]=Пошук
+Name[it]=Ricerca
+Comment=Search apps, files and more
+Exec=nebula-spotlight
+Icon=system-search
+Categories=Utility;
+NoDisplay=true
+X-KDE-Shortcuts=Meta+Space

@@ -53,3 +53,25 @@ function dockPanel(defaultPos, size, fill, floating) {
     safe(function () { p.floating = floating; });
     return p;
 }
+
+// Control Center button (Super+C) next to the tray.
+function addControlButton(panel) {
+    safe(function () {
+        var b = panel.addWidget("org.kde.plasma.icon");
+        b.currentConfigGroup = ["General"];
+        b.writeConfig("url", "file:///usr/share/applications/nebula-control.desktop");
+    });
+}
+
+// Desktop widgets of the mode, in a column on the right.
+function desktopWidgets(list) {
+    desktops().forEach(function (d) {
+        safe(function () { d.widgets().forEach(function (w) { w.remove(); }); });
+        var g = screenGeometry(d.screen);
+        var x = g.x + g.width - 360, y = g.y + 70;
+        list.forEach(function (item) {
+            safe(function () { d.addWidget(item[0], x, y, 320, item[1]); });
+            y += item[1] + 16;
+        });
+    });
+}

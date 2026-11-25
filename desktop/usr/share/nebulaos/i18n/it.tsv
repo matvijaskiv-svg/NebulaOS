@@ -111,7 +111,7 @@ Backups	Backup
 Copy of your home folder (rsync) to a drive or folder.	Copia della cartella home (rsync) su un disco o una cartella.
 For example an external drive	Ad esempio un disco esterno
 Back up now	Esegui il backup ora
-Back up	Backup
+Back up	Esegui
 Every day automatically	Ogni giorno in automatico
 About	Informazioni
 Assistant	Assistente
@@ -210,7 +210,7 @@ Memory and storage	Memoria e archiviazione
 Quick settings	Impostazioni rapide
 Power profile	Profilo energetico
 Connected network	Rete connessa
-Not connected	Non connesso
+Not connected	Non collegato
 Network settings…	Impostazioni di rete…
 Nearby networks	Reti vicine
 Choose a network in Network settings to enter its password.	Per inserire la password scegli la rete nelle impostazioni di rete.
@@ -746,3 +746,79 @@ Containers: {}	Container: {}
 Up for {} h {} min	Attivo da {} h {} min
 running	attivo
 stopped	fermo
+Control Center	Centro di controllo
+Search everything	Cerca ovunque
+Do not disturb	Non disturbare
+Lock	Blocca
+Mode: Gaming	Modalità: Gaming
+Mode: Hacking	Modalità: Hacking
+Mode: Server	Modalità: Server
+Shut down	Spegni
+Search apps, files, or type 2+2…	App, file o un calcolo: 2+2…
+Ask the assistant: “{}”	Chiedi all'assistente: «{}»
+Search the web: “{}”	Cerca sul web: «{}»
+Copies of your home folder on another drive. Every copy keeps its date; unchanged files take no extra space.	Copie della cartella home su un altro disco. Ogni copia ha la sua data; i file invariati non occupano altro spazio.
+Backup drive	Disco di backup
+Not chosen	Non scelto
+Connected	Collegato
+Choose a USB drive or a disk	Scegli una chiavetta o un disco
+USB drive	Chiavetta USB
+Use	Usa
+Free on the drive: {} GB of {} GB	Libero sul disco: {} GB su {} GB
+Back up automatically every hour	Backup automatico ogni ora
+Only while the drive is connected	Solo con il disco collegato
+Copies	Copie
+No copies yet.	Ancora nessuna copia.
+Last copy: {}	Ultima copia: {}
+Restore a file…	Ripristina un file…
+Choose a file to bring back	Scegli il file da ripristinare
+{} already exists. Keep both?	{} esiste già. Tenere entrambi?
+restored	ripristinato
+Restored: {}	Ripristinato: {}
+Backup finished	Backup completato
+Phone	Telefono
+Your phone and this computer work together: notifications, files, clipboard.	Telefono e computer lavorano insieme: notifiche, file, appunti.
+1. Install KDE Connect on the phone	1. Installa KDE Connect sul telefono
+2. Connect both to the same Wi-Fi	2. Collega entrambi alla stessa rete Wi-Fi
+Open KDE Connect on the phone; the phone appears below.	Apri KDE Connect sul telefono: apparirà qui sotto.
+3. Accept on the phone	3. Conferma sul telefono
+Confirm the pairing request on the phone.	Conferma la richiesta di associazione sul telefono.
+Open link	Apri il link
+Pair	Associa
+nearby	vicino
+not nearby	non vicino
+No phone found yet.	Nessun telefono trovato.
+Not nearby — open KDE Connect on the phone	Non vicino — apri KDE Connect sul telefono
+Send files	Invia file
+Find my phone	Trova il telefono
+It rings loudly, even in silent mode	Suona forte, anche in modalità silenziosa
+Ring	Fai squillare
+Send the clipboard	Invia gli appunti
+Unpair	Dissocia
+Now confirm the request on the phone.	Ora conferma la richiesta sul telefono.
+All KDE Connect settings	Tutte le impostazioni di KDE Connect
+Remote input, media control, battery, shared folders	Telecomando, media, batteria, cartelle condivise
+Screen time	Tempo di utilizzo
+Today	Oggi
+Today: {}	Oggi: {}
+This week	Questa settimana
+Nothing counted yet today.	Oggi non è stato ancora contato nulla.
+Daily limits	Limiti giornalieri
+When a limit is near you get a warning; when it is reached the app closes.	Vicino al limite ricevi un avviso; raggiunto il limite l'app si chiude.
+Add a limit	Aggiungi un limite
+Minutes a day:	Minuti al giorno:
+{} min a day	{} min al giorno
+What is inside this computer and which driver runs it.	Cosa c'è nel computer e quale driver lo gestisce.
+No driver in use	Nessun driver in uso
+No devices found.	Nessun dispositivo trovato.
+Recommended packages	Pacchetti consigliati
+Graphics drivers are installed	I driver grafici sono installati
+Check again	Controlla di nuovo
+Updates for BIOS, SSD, touchpad and other parts, from the vendors (fwupd).	Aggiornamenti di BIOS, SSD, touchpad e altro dai produttori (fwupd).
+Firmware updates	Aggiornamenti firmware
+Install fwupd	Installa fwupd
+Firmware updates available	Aggiornamenti firmware disponibili
+Firmware is up to date.	Il firmware è aggiornato.
+Hourly backups enabled.\n	Backup orari attivati.\n
+Automatic backups disabled.\n	Backup automatici disattivati.\n
+the backup drive is not connected	il disco di backup non è collegato
