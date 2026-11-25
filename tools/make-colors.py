@@ -15,22 +15,22 @@ OUT_KONSOLE = ROOT / "desktop/usr/share/konsole"
 # bg — окна, base — поля и списки, alt — чередование строк, surface — кнопки/заголовки,
 # text, muted, accent, accent2, ansi — 16 цветов терминала.
 MODES = {
-    "Gaming": dict(
-        title="NebulaOS Gaming", bg="#121022", base="#0d0b1a", alt="#161330", surface="#1d1838",
-        header="#100e1e", text="#ece9ff", muted="#9a94c2", accent="#8b5cf6", accent2="#06b6d4",
-        negative="#f43f5e", neutral="#f59e0b", positive="#22c55e",
-        ansi=["#1d1838", "#f43f5e", "#22c55e", "#f59e0b", "#3b82f6", "#a855f7", "#06b6d4", "#d4d0f0",
-              "#3a3360", "#fb7185", "#4ade80", "#fbbf24", "#60a5fa", "#c084fc", "#22d3ee", "#ffffff"]),
-    "Hacking": dict(  # Catppuccin Mocha
-        title="NebulaOS Hacking", bg="#1e1e2e", base="#181825", alt="#232334", surface="#313244",
-        header="#181825", text="#cdd6f4", muted="#a6adc8", accent="#cba6f7", accent2="#f5c2e7",
-        negative="#f38ba8", neutral="#f9e2af", positive="#a6e3a1",
-        ansi=["#45475a", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#f5c2e7", "#94e2d5", "#bac2de",
-              "#585b70", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#f5c2e7", "#94e2d5", "#a6adc8"]),
-    "Server": dict(  # Ubuntu-like
-        title="NebulaOS Server", bg="#2a0f22", base="#21091b", alt="#30122a", surface="#3d1733",
-        header="#22091b", text="#f7f2f5", muted="#c7b3c0", accent="#e95420", accent2="#f6a03d",
-        negative="#e01b24", neutral="#f6a03d", positive="#4e9a06",
+    "Gaming": dict(  # Garuda-like: neutral near-black, one strong red accent (no purple, no gradients)
+        title="NebulaOS Gaming", bg="#151517", base="#0f0f11", alt="#1b1b1e", surface="#232327",
+        header="#111113", text="#ececef", muted="#9b9ba3", accent="#e5484d", accent2="#ff8a3d",
+        negative="#ff5c63", neutral="#f5a524", positive="#30a46c",
+        ansi=["#232327", "#e5484d", "#30a46c", "#f5a524", "#3e8ef7", "#c25ec4", "#2bb3c0", "#d4d4d8",
+              "#3a3a40", "#ff6b70", "#4cc38a", "#ffc53d", "#5aa2ff", "#d987db", "#45cfdb", "#ffffff"]),
+    "Hacking": dict(  # macOS dark: graphite greys, system blue
+        title="NebulaOS Hacking", bg="#1e1e1e", base="#191919", alt="#232323", surface="#2c2c2e",
+        header="#1a1a1a", text="#e8e8ea", muted="#98989d", accent="#0a84ff", accent2="#64d2ff",
+        negative="#ff453a", neutral="#ffd60a", positive="#32d74b",
+        ansi=["#2c2c2e", "#ff453a", "#32d74b", "#ffd60a", "#0a84ff", "#bf5af2", "#64d2ff", "#d1d1d6",
+              "#48484a", "#ff6961", "#5be37a", "#ffe066", "#409cff", "#da8fff", "#8ad9ff", "#ffffff"]),
+    "Server": dict(  # Ubuntu Yaru dark: neutral greys, Ubuntu orange
+        title="NebulaOS Server", bg="#2c2c2c", base="#242424", alt="#303030", surface="#3a3a3a",
+        header="#262626", text="#f2f2f2", muted="#ababab", accent="#e95420", accent2="#f6a03d",
+        negative="#c7162b", neutral="#f99b11", positive="#0e8420",
         ansi=["#2e3436", "#cc0000", "#4e9a06", "#c4a000", "#3465a4", "#75507b", "#06989a", "#d3d7cf",
               "#555753", "#ef2929", "#8ae234", "#fce94f", "#729fcf", "#ad7fa8", "#34e2e2", "#eeeeec"]),
 }
