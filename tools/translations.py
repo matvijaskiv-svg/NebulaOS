@@ -411,6 +411,10 @@ T = {
     "Turbo mode: effects off": ("Турбо-режим: эффекты выключены", "Турбо-режим: ефекти вимкнено", "Modalità turbo: effetti disattivati"),
     "\\nPress Enter to close…": ("\\nНажмите Enter, чтобы закрыть…", "\\nНатисніть Enter, щоб закрити…", "\\nPremi Invio per chiudere…"),
     "Enable the NebulaOS update repository? [Y/n] ": ("Подключить репозиторий обновлений NebulaOS? [Y/n] ", "Підключити репозиторій оновлень NebulaOS? [Y/n] ", "Attivare il repository degli aggiornamenti di NebulaOS? [Y/n] "),
+    "\\033[1mInstalled: NebulaOS %s.\\033[0m Looking for updates (your password is needed)…\\n": (
+        "\\033[1mУстановлена NebulaOS %s.\\033[0m Ищу обновления (нужен ваш пароль)…\\n",
+        "\\033[1mВстановлено NebulaOS %s.\\033[0m Шукаю оновлення (потрібен ваш пароль)…\\n",
+        "\\033[1mInstallato: NebulaOS %s.\\033[0m Cerco aggiornamenti (serve la password)…\\n"),
     "\\033[1mNebulaOS %s — update\\033[0m\\n": ("\\033[1mNebulaOS %s — обновление\\033[0m\\n", "\\033[1mNebulaOS %s — оновлення\\033[0m\\n", "\\033[1mNebulaOS %s — aggiornamento\\033[0m\\n"),
     "snap-pac takes snapshots before and after the update (rollback: GRUB menu → snapshots).\\n":
         ("snap-pac создаст снимки до и после обновления (откат: меню GRUB → snapshots).\\n", "snap-pac створить знімки до і після оновлення (відкат: меню GRUB → snapshots).\\n", "snap-pac crea snapshot prima e dopo l'aggiornamento (ripristino: menu GRUB → snapshots).\\n"),

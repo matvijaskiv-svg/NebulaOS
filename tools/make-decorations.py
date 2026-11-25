@@ -65,7 +65,7 @@ def mac_button(kind):
         glyph = (f'<path d="{GLYPH[kind]}" stroke="#4d0000" stroke-opacity="0.7" stroke-width="1.4" '
                  f'stroke-linecap="round" fill="none"/>' if state in ("hover", "pressed") else "")
         dim = '<circle cx="8" cy="8" r="6" fill="#000" fill-opacity="0.2"/>' if state == "pressed" else ""
-        states.append(f'<g id="{state}" transform="translate({i * 16},0)">{BOX}<circle cx="8" cy="8" r="6" fill="{fill}"/>'
+        states.append(f'<g id="{state}-center" transform="translate({i * 16},0)">{BOX}<circle cx="8" cy="8" r="6" fill="{fill}"/>'
                       f'{dim}{glyph}</g>')
     return svg(80, 16, "\n".join(states))
 
@@ -78,7 +78,7 @@ def neon_button(kind):
         stroke = {"inactive": "#6f6a8a", "deactivated": "#3c3850"}.get(state, c)
         halo = (f'<circle cx="8" cy="8" r="7.5" fill="{c}" fill-opacity="{0.18 if state == "hover" else 0.32}"/>'
                 if state in ("hover", "pressed") else "")
-        states.append(f'<g id="{state}" transform="translate({i * 16},0)">{BOX}{halo}'
+        states.append(f'<g id="{state}-center" transform="translate({i * 16},0)">{BOX}{halo}'
                       f'<path d="{GLYPH[kind]}" stroke="{stroke}" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>')
     return svg(80, 16, "\n".join(states))
 
@@ -91,7 +91,7 @@ def yaru_button(kind):
         else:
             fill = {"inactive": "#3c3c3c", "hover": "#5a5a5a", "pressed": "#6a6a6a", "deactivated": "#333333"}.get(state, "#4a4a4a")
         stroke = "#9a9a9a" if state in ("inactive", "deactivated") else "#ffffff"
-        states.append(f'<g id="{state}" transform="translate({i * 16},0)">{BOX}<circle cx="8" cy="8" r="7.5" fill="{fill}"/>'
+        states.append(f'<g id="{state}-center" transform="translate({i * 16},0)">{BOX}<circle cx="8" cy="8" r="7.5" fill="{fill}"/>'
                       f'<path d="{GLYPH[kind]}" transform="translate(8,8) scale(0.8) translate(-8,-8)" stroke="{stroke}" '
                       f'stroke-width="1.6" stroke-linecap="round" fill="none"/></g>')
     return svg(80, 16, "\n".join(states))
