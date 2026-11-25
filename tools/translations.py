@@ -862,6 +862,25 @@ T = {
     "More layouts and options": ("Другие раскладки и параметры", "Інші розкладки й параметри", "Altri layout e opzioni"),
     "Layouts: %s (switch: Alt+Shift)\\n": ("Раскладки: %s (переключение: Alt+Shift)\\n",
         "Розкладки: %s (перемикання: Alt+Shift)\\n", "Layout: %s (cambia: Alt+Shift)\\n"),
+    # ---- 0.7.4: store ----
+    "Popular": ("Популярное", "Популярне", "Popolari"),
+    "Browsers": ("Браузеры", "Браузери", "Browser"),
+    "Office and study": ("Офис и учёба", "Офіс і навчання", "Ufficio e studio"),
+    "System tools": ("Системные утилиты", "Системні утиліти", "Strumenti di sistema"),
+    "Installed": ("Установленные", "Встановлені", "Installate"),
+    "Installing {}…": ("Устанавливаю {}…", "Встановлюю {}…", "Installazione di {}…"),
+    "Removing {}…": ("Удаляю {}…", "Видаляю {}…", "Rimozione di {}…"),
+    "The system may ask for your password.": ("Система может спросить пароль.", "Система може запитати пароль.",
+                                              "Il sistema potrebbe chiedere la password."),
+    "Details": ("Подробнее", "Докладніше", "Dettagli"),
+    "Updating the package lists and installing {}…": ("Обновляю списки пакетов и устанавливаю {}…",
+        "Оновлюю списки пакетів і встановлюю {}…", "Aggiorno gli elenchi dei pacchetti e installo {}…"),
+    "{} is installed.": ("{} установлена.", "{} встановлено.", "{} è installata."),
+    "{} is removed.": ("{} удалена.", "{} видалено.", "{} è rimossa."),
+    "Something went wrong.": ("Что-то пошло не так.", "Щось пішло не так.", "Qualcosa è andato storto."),
+    "Cancelled, or no internet. Open Details to see why.": ("Отменено или нет интернета. Причина — в «Подробнее».",
+        "Скасовано або немає інтернету. Причина — у «Докладніше».", "Annullato o niente internet. Vedi Dettagli."),
+    "Open": ("Открыть", "Відкрити", "Apri"),
 }
 
 OUT = Path(__file__).resolve().parent.parent / "desktop/usr/share/nebulaos/i18n"
