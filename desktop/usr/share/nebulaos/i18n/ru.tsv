@@ -44,7 +44,7 @@ Choose a wallpaper	Выберите обои
 Images	Изображения
 Backup folder	Папка для копий
 Updates	Обновления
-Checking…	Проверка…
+Checking…	Проверяю…
 System is up to date	Система обновлена
 Update the system	Обновить систему
 NebulaOS and all apps; snapshots are taken before and after	NebulaOS и все программы; до и после создаются снимки
@@ -770,3 +770,26 @@ Films and music for your devices	Фильмы и музыка для ваших 
 Play with friends	Играйте с друзьями
 Block incoming connections except open services	Блокировать входящие подключения, кроме открытых служб
 Rules	Правила
+Discover	Главная
+Music and video	Музыка и видео
+Graphics and photo	Графика и фото
+Internet and chat	Интернет и общение
+Education	Образование
+Science	Наука
+Utilities	Утилиты
+See all	Все
+App of the day	Программа дня
+About this app	О программе
+Loading the catalog…	Загружаю каталог…
+The first start downloads the Flathub catalog. It takes a minute.	При первом запуске скачивается каталог Flathub. Это займёт минуту.
+Show more ({})	Показать ещё ({})
+Arch packages	Пакеты Arch
+Apps you install appear here.	Здесь появятся установленные программы.
+All apps are up to date. System updates: Settings → Updates.	Все программы обновлены. Обновления системы: Настройки → Обновления.
+Updates available: {}	Доступно обновлений: {}
+Update all	Обновить всё
+License	Лицензия
+proprietary	проприетарная
+Source	Источник
+Website	Сайт
+Loading…	Загрузка…

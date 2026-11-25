@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.8.0
+- App Store with the whole Flathub catalog (3000+ apps, screenshots, categories); space wallpapers in the colors of each mode
+
 ## 0.7.8
 - New look without purple: graphite and blue for Hacking, black and red for Gaming, grey and orange for Server; calm new wallpapers
 

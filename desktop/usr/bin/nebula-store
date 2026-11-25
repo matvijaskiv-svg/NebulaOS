@@ -1,39 +1,146 @@
 #!/usr/bin/env python3
-"""Nebula Store — curated apps and search across Arch and Flathub (native Qt).
+"""App Store — the whole Flathub catalog (3000+ apps) plus Arch packages.
 
-Install and remove right in the window with a progress bar: Arch packages through
-pkexec (the system asks for your password in a normal dialog), Flathub apps per user.
+Discover page with a featured app and rows, categories, instant search, an app page
+with screenshots and description, Installed and Updates. Installing happens in the
+window with a progress bar (Flathub: per user, no password; Arch: pkexec).
 """
+import gzip
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import urllib.request
+import xml.etree.ElementTree as ET
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/nebulaos")
 from nebula_qt import _, QIcon, app, background, fit, tile  # noqa: E402
-from PySide6.QtCore import QProcess, QSize, Qt  # noqa: E402
+from PySide6.QtCore import QProcess, QSize, Qt, QTimer  # noqa: E402
+from PySide6.QtGui import QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
+    QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
-CATALOG = Path("/usr/share/nebulaos/store.json")
 FLATHUB = "https://dl.flathub.org/repo/flathub.flatpakrepo"
-SECTION_ICONS = {"Popular": ("starred", "#f59e0b"), "Games": ("input-gaming", "#8b5cf6"),
-                 "Chat and internet": ("mail-message", "#0ea5e9"), "Browsers": ("internet-web-browser", "#2563eb"),
-                 "Media and creativity": ("applications-multimedia", "#ec4899"),
-                 "Development": ("applications-development", "#14b8a6"), "Office and study": ("x-office-document", "#f97316"),
-                 "Security": ("security-high", "#dc2626"), "System tools": ("preferences-system", "#64748b")}
+CURATED = Path("/usr/share/nebulaos/store.json")
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "nebulaos"
+APPSTREAM_DIRS = [Path.home() / ".local/share/flatpak/appstream/flathub/x86_64/active",
+                  Path("/var/lib/flatpak/appstream/flathub/x86_64/active")]
+XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
+CATEGORIES = [  # (title, Flathub category, icon, color)
+    ("Games", "Game", "input-gaming", "#e5484d"),
+    ("Music and video", "AudioVideo", "applications-multimedia", "#ec4899"),
+    ("Graphics and photo", "Graphics", "applications-graphics", "#f59e0b"),
+    ("Internet and chat", "Network", "applications-internet", "#0ea5e9"),
+    ("Office", "Office", "x-office-document", "#f97316"),
+    ("Development", "Development", "applications-development", "#14b8a6"),
+    ("Education", "Education", "applications-education", "#22c55e"),
+    ("Science", "Science", "applications-science", "#6366f1"),
+    ("System", "System", "preferences-system", "#64748b"),
+    ("Utilities", "Utility", "applications-utilities", "#8b8b95"),
+]
 PERCENT = re.compile(r"(\d{1,3})%")
 
 
-def installed_pacman():
+def ui_lang():
     try:
-        return set(subprocess.run(["pacman", "-Qq"], capture_output=True, text=True).stdout.split())
+        return (Path.home() / ".config/nebulaos/lang").read_text().strip() or "en"
     except OSError:
-        return set()
+        return os.environ.get("LANG", "en")[:2]
+
+
+# ---------------------------------------------------------------- catalog
+def appstream_dir():
+    for d in APPSTREAM_DIRS:
+        if (d / "appstream.xml.gz").exists() or (d / "appstream.xml").exists():
+            return d
+    return None
+
+
+def localized(comp, tag, lang):
+    best = None
+    for el in comp.findall(tag):
+        l = el.get(XML_LANG)
+        if l is None and best is None:
+            best = el
+        elif l and l.split("_")[0] == lang:
+            return el
+    return best
+
+
+def text_of(el):
+    if el is None:
+        return ""
+    parts = []
+    for child in el.iter():
+        if child.tag in ("p", "li") and child.text:
+            parts.append(("• " if child.tag == "li" else "") + " ".join(child.text.split()))
+    return "\n\n".join(parts) if parts else " ".join((el.text or "").split())
+
+
+def load_catalog():
+    """[{id, name, summary, desc, dev, cats, icon, shots, license, homepage}] from Flathub appstream."""
+    d = appstream_dir()
+    if not d:
+        return []
+    src = d / "appstream.xml.gz" if (d / "appstream.xml.gz").exists() else d / "appstream.xml"
+    lang = ui_lang()
+    cache = CACHE / f"flathub-{lang}.json"
+    try:
+        if cache.exists() and cache.stat().st_mtime >= src.stat().st_mtime:
+            return json.loads(cache.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    opener = gzip.open if src.suffix == ".gz" else open
+    with opener(src, "rb") as fh:
+        root = ET.parse(fh).getroot()
+    apps = []
+    for c in root.findall("component"):
+        if c.get("type") not in ("desktop-application", "desktop"):
+            continue
+        cid = c.findtext("id") or ""
+        name = localized(c, "name", lang)
+        if not cid or name is None:
+            continue
+        icon = ""
+        for size in ("128x128", "64x64"):
+            for ic in c.findall("icon"):
+                if ic.get("type") == "cached" and (d / "icons" / size / (ic.text or "")).exists():
+                    icon = str(d / "icons" / size / ic.text)
+                    break
+            if icon:
+                break
+        shots = []
+        for s in c.findall("screenshots/screenshot"):
+            imgs = [(int(i.get("width") or 0), i.text) for i in s.findall("image") if i.get("type") == "thumbnail"]
+            imgs = [x for x in imgs if 500 <= x[0] <= 1300] or imgs
+            if imgs:
+                shots.append(sorted(imgs)[0][1])
+        summary = localized(c, "summary", lang)
+        apps.append({
+            "id": cid.removesuffix(".desktop"), "source": "flathub",
+            "name": (name.text or "").strip(),
+            "summary": (summary.text or "").strip() if summary is not None else "",
+            "desc": text_of(localized(c, "description", lang)),
+            "dev": c.findtext("developer/name") or c.findtext("developer_name") or "",
+            "cats": [x.text for x in c.findall("categories/category") if x.text],
+            "icon": icon, "shots": shots[:5],
+            "license": c.findtext("project_license") or "",
+            "homepage": next((u.text for u in c.findall("url") if u.get("type") == "homepage"), ""),
+            "keywords": " ".join(k.text or "" for k in c.findall("keywords/keyword")),
+        })
+    apps.sort(key=lambda a: a["name"].lower())
+    try:
+        CACHE.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(apps, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+    return apps
 
 
 def installed_flatpak():
@@ -47,47 +154,62 @@ def installed_flatpak():
         return set()
 
 
-def search(query):
+def installed_pacman():
+    try:
+        return set(subprocess.run(["pacman", "-Qq"], capture_output=True, text=True).stdout.split())
+    except OSError:
+        return set()
+
+
+def flatpak_updates():
+    try:
+        out = subprocess.run(["flatpak", "remote-ls", "--updates", "--app", "--columns=application"],
+                             capture_output=True, text=True, timeout=60).stdout
+        return [x for x in out.split() if "." in x]
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+
+
+def pacman_search(query):
     out = []
     try:
-        p = subprocess.run(["pacman", "-Ss", query], capture_output=True, text=True, timeout=30)
-        lines = p.stdout.splitlines()
+        lines = subprocess.run(["pacman", "-Ss", query], capture_output=True, text=True, timeout=30).stdout.splitlines()
         for i in range(0, len(lines) - 1, 2):
             head = lines[i].split()
             if head:
                 name = head[0].split("/", 1)[-1]
-                out.append({"source": "arch", "id": name, "name": name, "desc": lines[i + 1].strip()})
+                out.append({"source": "arch", "id": name, "name": name, "summary": lines[i + 1].strip(),
+                            "desc": lines[i + 1].strip(), "dev": "Arch Linux", "cats": [], "icon": "", "shots": []})
     except (OSError, subprocess.TimeoutExpired):
         pass
-    out = out[:48]
-    if shutil.which("flatpak"):
-        try:
-            p = subprocess.run(["flatpak", "search", "--columns=application,name,description", query],
-                               capture_output=True, text=True, timeout=30)
-            for line in p.stdout.splitlines():
-                parts = line.split("\t")
-                if len(parts) >= 3 and "." in parts[0]:
-                    out.append({"source": "flathub", "id": parts[0], "name": parts[1], "desc": parts[2]})
-        except (OSError, subprocess.TimeoutExpired):
-            pass
-    return out[:80]
+    return out[:30]
 
 
+def cached_image(url, folder="shots"):
+    """Download once into ~/.cache/nebulaos/<folder>, return the local path."""
+    d = CACHE / folder
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / re.sub(r"[^A-Za-z0-9._-]", "_", url[-120:])
+    if not path.exists():
+        req = urllib.request.Request(url, headers={"User-Agent": "NebulaOS-AppStore"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            path.write_bytes(r.read(6_000_000))
+    return str(path)
+
+
+# ---------------------------------------------------------------- install / remove
 def steps(item, remove):
-    """Commands for one install/remove, run one after another."""
     pid = item["id"]
     if item["source"] == "arch":
-        if remove:
-            return [["pkexec", "pacman", "-Rns", "--noconfirm", pid]]
-        return [["pkexec", "pacman", "-S", "--needed", "--noconfirm", pid]]
+        return [["pkexec", "pacman", "-Rns", "--noconfirm", pid]] if remove else \
+               [["pkexec", "pacman", "-S", "--needed", "--noconfirm", pid]]
     if remove:
-        return [["flatpak", "uninstall", "--user", "-y", "--noninteractive", pid]]
+        return [["flatpak", "uninstall", "-y", "--noninteractive", pid]]
     return [["flatpak", "remote-add", "--user", "--if-not-exists", "flathub", FLATHUB],
             ["flatpak", "install", "--user", "-y", "--noninteractive", "flathub", pid]]
 
 
 def launch(item):
-    """Open an installed app."""
     if item["source"] == "flathub":
         subprocess.Popen(["flatpak", "run", item["id"]])
         return
@@ -103,13 +225,10 @@ def launch(item):
 
 
 class Progress(QDialog):
-    """Runs the steps with a progress bar; the details are one click away."""
-
-    def __init__(self, parent, item, remove):
+    def __init__(self, parent, item, remove, queue=None):
         super().__init__(parent)
-        self.item, self.remove, self.ok = item, remove, False
-        self.queue = steps(item, remove)
-        self.retried = False
+        self.item, self.remove, self.ok, self.retried = item, remove, False, False
+        self.queue = queue or steps(item, remove)
         self.setWindowTitle(item["name"])
         self.setMinimumWidth(460)
         v = QVBoxLayout(self)
@@ -164,7 +283,6 @@ class Progress(QDialog):
         log = self.log.toPlainText()
         if code != 0 and self.item["source"] == "arch" and not self.remove and not self.retried \
                 and ("404" in log or "target not found" in log or "failed retrieving" in log):
-            # Package lists are old: update the system together with the app (the Arch way).
             self.retried = True
             self.label.setText(_("Updating the package lists and installing {}…").format(self.item["name"]))
             self.queue = [["pkexec", "pacman", "-Syu", "--needed", "--noconfirm", self.item["id"]]]
@@ -191,129 +309,121 @@ class Progress(QDialog):
             super().reject()
 
 
-class AppCard(QFrame):
+# ---------------------------------------------------------------- widgets
+def app_icon(item, size):
+    if item.get("icon") and Path(item["icon"]).exists():
+        return QPixmap(item["icon"]).scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    ic = QIcon.fromTheme(item["id"], QIcon.fromTheme(item.get("theme_icon") or item["id"].split(".")[-1].lower(),
+                                                     QIcon.fromTheme("application-x-executable")))
+    return ic.pixmap(QSize(size, size))
+
+
+def heading(text, scale=1.45):
+    lbl = QLabel(text)
+    f = lbl.font()
+    f.setPointSizeF(f.pointSizeF() * scale)
+    f.setBold(True)
+    lbl.setFont(f)
+    return lbl
+
+
+def muted(text, wrap=True):
+    lbl = QLabel(text)
+    lbl.setWordWrap(wrap)
+    lbl.setStyleSheet("color: palette(placeholder-text);")
+    return lbl
+
+
+class Tile(QFrame):
+    """App tile: icon, name, one-line summary, Get/Open button. Click opens the app page."""
+
     def __init__(self, store, item):
         super().__init__()
         self.store, self.item = store, item
         self.setObjectName("group")
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(12, 10, 12, 10)
-        lay.setSpacing(12)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setMinimumWidth(240)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        h = QHBoxLayout(self)
+        h.setContentsMargins(12, 10, 12, 10)
+        h.setSpacing(12)
         icon = QLabel()
-        guess = item.get("icon") or item["id"].split(".")[-1].lower()
-        ic = QIcon.fromTheme(item["id"], QIcon.fromTheme(guess, QIcon.fromTheme("application-x-executable")))
-        icon.setPixmap(ic.pixmap(QSize(40, 40)))
-        icon.setFixedSize(44, 44)
-        lay.addWidget(icon, 0, Qt.AlignTop)
+        icon.setPixmap(app_icon(item, 52))
+        icon.setFixedSize(56, 56)
+        h.addWidget(icon)
         text = QVBoxLayout()
-        text.setSpacing(2)
+        text.setSpacing(1)
         name = QLabel(item["name"])
         f = name.font()
         f.setBold(True)
         name.setFont(f)
-        desc = QLabel(_(item.get("desc", "")))
-        desc.setWordWrap(True)
-        desc.setStyleSheet("color: palette(placeholder-text);")
-        src = QLabel("Flathub" if item["source"] == "flathub" else "Arch")
-        src.setStyleSheet("color: palette(placeholder-text); font-size: 8pt;")
+        summary = muted("", wrap=False)
+        summary.setText(summary.fontMetrics().elidedText(item.get("summary", ""), Qt.ElideRight, 190))
         text.addWidget(name)
-        text.addWidget(desc)
-        text.addWidget(src)
-        lay.addLayout(text, 1)
-        self.buttons = QVBoxLayout()
-        lay.addLayout(self.buttons)
-        self.draw_buttons()
+        text.addWidget(summary)
+        h.addLayout(text, 1)
+        installed = store.is_installed(item)
+        btn = QPushButton(_("Open") if installed else _("Get"))
+        btn.setDefault(not installed)
+        btn.setMinimumWidth(104)
+        btn.clicked.connect(lambda: store.primary_action(item))
+        h.addWidget(btn)
 
-    def draw_buttons(self):
-        while self.buttons.count():
-            w = self.buttons.takeAt(0).widget()
-            if w:
-                w.deleteLater()
-        if self.store.is_installed(self.item):
-            open_btn = QPushButton(_("Open"))
-            open_btn.setDefault(True)
-            open_btn.clicked.connect(lambda: launch(self.item))
-            rm = QPushButton(_("Remove"))
-            rm.setFlat(True)
-            rm.clicked.connect(lambda: self.run(remove=True))
-            self.buttons.addWidget(open_btn)
-            self.buttons.addWidget(rm)
-        else:
-            btn = QPushButton(_("Install"))
-            btn.setDefault(True)
-            btn.clicked.connect(lambda: self.run(remove=False))
-            self.buttons.addWidget(btn)
-
-    def run(self, remove):
-        if remove and QMessageBox.question(self, "Nebula Store",
-                                           _("Remove {}?").format(self.item["name"])) != QMessageBox.Yes:
-            return
-        dlg = Progress(self, self.item, remove)
-        dlg.exec()
-        if dlg.ok:
-            self.store.refresh_installed()
-            self.draw_buttons()
+    def mouseReleaseEvent(self, _e):
+        self.store.open_app(self.item)
 
 
 class Store(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("App Store")
+        self.catalog, self.by_id = [], {}
         try:
-            self.catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
+            self.curated = json.loads(CURATED.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            self.catalog = {}
+            self.curated = {}
         self.refresh_installed()
 
         self.nav = QListWidget()
         self.nav.setObjectName("nav")
         self.nav.setFixedWidth(230)
         self.nav.setIconSize(QSize(24, 24))
-        for section in self.catalog:
-            glyph, color = SECTION_ICONS.get(section, ("applications-other", "#64748b"))
-            item = QListWidgetItem(tile(glyph, color), _(section))
+        self.pages = [("Discover", "starred", "#f59e0b", None)] + \
+                     [(t, i, c, cat) for t, cat, i, c in CATEGORIES] + \
+                     [("Installed", "checkmark", "#16a34a", "installed"), ("Updates", "update-none", "#0a84ff", "updates")]
+        for title, icon, color, _k in self.pages:
+            item = QListWidgetItem(tile(icon, color), _(title))
             item.setSizeHint(QSize(0, 38))
             self.nav.addItem(item)
-        item = QListWidgetItem(tile("checkmark", "#16a34a"), _("Installed"))
-        item.setSizeHint(QSize(0, 38))
-        self.nav.addItem(item)
-        self.nav.currentRowChanged.connect(self.show_section)
+        self.nav.currentRowChanged.connect(self.show_nav)
 
         self.search = QLineEdit()
         self.search.setPlaceholderText(_("Search apps…"))
         self.search.setClearButtonEnabled(True)
-        self.search.returnPressed.connect(self.on_search)
-        self.title = QLabel()
-        f = self.title.font()
-        f.setPointSizeF(f.pointSizeF() * 1.45)
-        f.setBold(True)
-        self.title.setFont(f)
+        self.search.setMinimumWidth(320)
+        self.search_timer = QTimer(self)
+        self.search_timer.setSingleShot(True)
+        self.search_timer.timeout.connect(self.on_search)
+        self.search.textChanged.connect(lambda _t: self.search_timer.start(300))
+        self.back_btn = QPushButton("‹ " + _("Back"))
+        self.back_btn.setFlat(True)
+        self.back_btn.hide()
+        self.back_btn.clicked.connect(self.go_back)
+        top = QHBoxLayout()
+        top.setContentsMargins(24, 14, 24, 6)
+        top.addWidget(self.back_btn)
+        top.addStretch(1)
+        top.addWidget(self.search)
 
-        self.grid_host = QWidget()
-        self.grid = QGridLayout(self.grid_host)
-        self.grid.setSpacing(12)
-        self.grid.setContentsMargins(0, 0, 0, 0)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        holder = QWidget()
-        hv = QVBoxLayout(holder)
-        hv.setContentsMargins(0, 0, 0, 0)
-        hv.addWidget(self.grid_host)
-        hv.addStretch(1)
-        scroll.setWidget(holder)
-
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
         right = QWidget()
         rv = QVBoxLayout(right)
-        rv.setContentsMargins(24, 18, 24, 12)
-        rv.setSpacing(12)
-        top = QHBoxLayout()
-        top.addWidget(self.title, 1)
-        self.search.setMinimumWidth(260)
-        top.addWidget(self.search)
+        rv.setContentsMargins(0, 0, 0, 0)
+        rv.setSpacing(0)
         rv.addLayout(top)
-        rv.addWidget(scroll, 1)
-
+        rv.addWidget(self.scroll, 1)
         body = QWidget()
         lay = QHBoxLayout(body)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -321,55 +431,369 @@ class Store(QMainWindow):
         lay.addWidget(self.nav)
         lay.addWidget(right, 1)
         self.setCentralWidget(body)
-        self.nav.setCurrentRow(0)
-        fit(self, 1000, 700)
+        self.history = []
+        self.scroll.setWidget(self.loading_page())
+        fit(self, 1180, 780)
+        if appstream_dir():
+            background(load_catalog, self.got_catalog)
+        else:
+            self.fetch_catalog()
+
+    # ---------- data ----------
+    def fetch_catalog(self):
+        """First start: add Flathub and download its catalog."""
+        self.proc = QProcess(self)
+        self.proc.finished.connect(lambda *_a: background(load_catalog, self.got_catalog))
+        self.proc.start("sh", ["-c", f"flatpak remote-add --user --if-not-exists flathub {FLATHUB} && "
+                                     "flatpak update --user --appstream -y flathub"])
+
+    def got_catalog(self, apps):
+        self.catalog = apps if isinstance(apps, list) else []
+        self.by_id = {a["id"]: a for a in self.catalog}
+        if self.nav.currentRow() < 0:
+            self.nav.setCurrentRow(0)
+        else:
+            self.show_nav(self.nav.currentRow())
 
     def refresh_installed(self):
-        self.have_arch = installed_pacman()
         self.have_flat = installed_flatpak()
+        self.have_arch = installed_pacman()
 
     def is_installed(self, item):
         return item["id"] in (self.have_arch if item["source"] == "arch" else self.have_flat)
 
-    def fill(self, items):
-        while self.grid.count():
-            w = self.grid.takeAt(0).widget()
-            if w:
-                w.deleteLater()
-        if not items:
-            self.grid.addWidget(QLabel(_("Nothing found")), 0, 0)
-        for i, item in enumerate(items):
-            self.grid.addWidget(AppCard(self, item), i // 2, i % 2)
+    def resolve(self, entry):
+        """A curated store.json entry → the full catalog entry when Flathub knows it."""
+        if entry["source"] == "flathub" and entry["id"] in self.by_id:
+            return self.by_id[entry["id"]]
+        return {"source": entry["source"], "id": entry["id"], "name": entry["name"],
+                "summary": _(entry.get("desc", "")), "desc": _(entry.get("desc", "")),
+                "dev": "Arch Linux" if entry["source"] == "arch" else "",
+                "cats": [], "icon": "", "shots": [], "theme_icon": entry.get("icon", "")}
 
-    def show_section(self, row):
+    # ---------- navigation ----------
+    def set_content(self, widget, push=False):
+        if push:
+            old = self.scroll.takeWidget()
+            if old is not None:
+                self.history.append(old)
+        else:
+            old = self.scroll.takeWidget()
+            if old is not None:
+                old.deleteLater()
+        self.scroll.setWidget(widget)
+        self.back_btn.setVisible(bool(self.history))
+        self.scroll.verticalScrollBar().setValue(0)
+
+    def go_back(self):
+        if self.history:
+            old = self.scroll.takeWidget()
+            if old is not None:
+                old.deleteLater()
+            self.scroll.setWidget(self.history.pop())
+            self.back_btn.setVisible(bool(self.history))
+
+    def clear_history(self):
+        for w in self.history:
+            w.deleteLater()
+        self.history = []
+
+    def show_nav(self, row):
         if row < 0:
             return
-        sections = list(self.catalog)
-        if row >= len(sections):
-            self.title.setText(_("Installed"))
-            seen, items = set(), []
-            for apps in self.catalog.values():
-                for a in apps:
-                    if a["id"] not in seen and self.is_installed(a):
-                        seen.add(a["id"])
-                        items.append(a)
-            self.fill(items)
-            return
-        self.title.setText(_(sections[row]))
-        self.fill(self.catalog[sections[row]])
+        self.clear_history()
+        title, _i, _c, key = self.pages[row]
+        if not self.catalog and key not in ("installed", "updates"):
+            self.set_content(self.loading_page())
+        elif key is None:
+            self.set_content(self.discover_page())
+        elif key == "installed":
+            self.set_content(self.installed_page())
+        elif key == "updates":
+            self.set_content(self.updates_page())
+        else:
+            self.set_content(self.grid_page(_(title), [a for a in self.catalog if key in a["cats"]]))
 
     def on_search(self):
-        query = self.search.text().strip()
-        if not query:
-            self.show_section(self.nav.currentRow())
+        q = self.search.text().strip().lower()
+        if not q:
+            self.show_nav(max(0, self.nav.currentRow()))
             return
-        self.title.setText(_("Results for “{}”: {}").format(query, "…"))
+        words = q.split()
+        hits = [a for a in self.catalog
+                if all(w in (a["name"] + " " + a.get("summary", "") + " " + a.get("keywords", "")).lower() for w in words)]
+        hits.sort(key=lambda a: (not a["name"].lower().startswith(q), a["name"].lower()))
+        self.clear_history()
+        page = self.grid_page(_("Results for “{}”: {}").format(self.search.text().strip(), len(hits)), hits)
+        self.set_content(page)
+        if len(q) >= 3:
+            def got(results):
+                if isinstance(results, list) and results and self.search.text().strip().lower() == q:
+                    self.append_arch(page, results)
+            background(lambda: pacman_search(q), got)
 
-        def done(results):
-            results = results if isinstance(results, list) else []
-            self.title.setText(_("Results for “{}”: {}").format(query, len(results)))
-            self.fill(results)
-        background(lambda: search(query), done)
+    # ---------- pages ----------
+    def page_box(self):
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 6, 24, 24)
+        v.setSpacing(14)
+        return w, v
+
+    def loading_page(self):
+        w, v = self.page_box()
+        v.addStretch(1)
+        lbl = heading(_("Loading the catalog…"), 1.2)
+        lbl.setAlignment(Qt.AlignCenter)
+        v.addWidget(lbl)
+        sub = muted(_("The first start downloads the Flathub catalog. It takes a minute."))
+        sub.setAlignment(Qt.AlignCenter)
+        v.addWidget(sub)
+        v.addStretch(2)
+        return w
+
+    def tiles(self, items, columns=3):
+        host = QWidget()
+        g = QGridLayout(host)
+        g.setContentsMargins(0, 0, 0, 0)
+        g.setSpacing(12)
+        for i, item in enumerate(items):
+            g.addWidget(Tile(self, item), i // columns, i % columns)
+        for c in range(columns):
+            g.setColumnStretch(c, 1)
+        return host
+
+    def featured(self):
+        picks = [self.by_id[x] for x in ("org.blender.Blender", "com.obsproject.Studio", "org.kde.krita",
+                                         "com.valvesoftware.Steam", "md.obsidian.Obsidian", "org.videolan.VLC",
+                                         "org.inkscape.Inkscape", "com.spotify.Client") if x in self.by_id]
+        return picks[date.today().toordinal() % len(picks)] if picks else None
+
+    def hero(self, item):
+        card = QFrame()
+        card.setObjectName("hero")
+        card.setStyleSheet("QFrame#hero { background: palette(highlight); border-radius: 16px; }"
+                           "QFrame#hero QLabel { color: palette(highlighted-text); background: transparent; }")
+        card.setCursor(Qt.PointingHandCursor)
+        card.mouseReleaseEvent = lambda _e: self.open_app(item)
+        h = QHBoxLayout(card)
+        h.setContentsMargins(28, 24, 28, 24)
+        h.setSpacing(22)
+        icon = QLabel()
+        icon.setPixmap(app_icon(item, 112))
+        h.addWidget(icon)
+        text = QVBoxLayout()
+        kicker = QLabel(_("App of the day").upper())
+        f = kicker.font()
+        f.setPointSizeF(f.pointSizeF() * 0.8)
+        f.setBold(True)
+        kicker.setFont(f)
+        text.addWidget(kicker)
+        text.addWidget(heading(item["name"], 1.9))
+        s = QLabel(item.get("summary", ""))
+        s.setWordWrap(True)
+        text.addWidget(s)
+        text.addStretch(1)
+        h.addLayout(text, 1)
+        btn = QPushButton(_("Open") if self.is_installed(item) else _("Get"))
+        btn.setFixedWidth(110)
+        btn.clicked.connect(lambda: self.primary_action(item))
+        h.addWidget(btn, 0, Qt.AlignVCenter)
+        return card
+
+    def row_header(self, title, target_row=None):
+        h = QHBoxLayout()
+        h.addWidget(heading(title, 1.2))
+        h.addStretch(1)
+        if target_row is not None:
+            more = QPushButton(_("See all"))
+            more.setFlat(True)
+            more.clicked.connect(lambda: self.nav.setCurrentRow(target_row))
+            h.addWidget(more)
+        return h
+
+    def discover_page(self):
+        w, v = self.page_box()
+        v.addWidget(heading(_("Discover"), 1.7))
+        feat = self.featured()
+        if feat:
+            v.addWidget(self.hero(feat))
+        popular = [self.resolve(e) for e in self.curated.get("Popular", [])]
+        if popular:
+            v.addLayout(self.row_header(_("Popular")))
+            v.addWidget(self.tiles(popular[:9]))
+        for row, (title, cat, _i, _c) in enumerate(CATEGORIES[:4], start=1):
+            apps = [a for a in self.catalog if cat in a["cats"] and a.get("icon") and a.get("shots")]
+            if apps:
+                import random
+                pick = random.Random(date.today().toordinal() + row).sample(apps, min(6, len(apps)))
+                v.addLayout(self.row_header(_(title), row))
+                v.addWidget(self.tiles(pick))
+        v.addStretch(1)
+        return w
+
+    def grid_page(self, title, apps, limit=60):
+        w, v = self.page_box()
+        v.addWidget(heading(title, 1.5))
+        if not apps:
+            v.addWidget(muted(_("Nothing found")))
+        v.addWidget(self.tiles(apps[:limit]))
+        if len(apps) > limit:
+            more = QPushButton(_("Show more ({})").format(len(apps) - limit))
+            more.clicked.connect(lambda: self.set_content(self.grid_page(title, apps, limit + 90)))
+            v.addWidget(more, 0, Qt.AlignHCenter)
+        v.addStretch(1)
+        w.extra = v
+        return w
+
+    def append_arch(self, page, results):
+        v = page.extra
+        v.insertLayout(v.count() - 1, self.row_header(_("Arch packages")))
+        v.insertWidget(v.count() - 1, self.tiles(results))
+
+    def installed_page(self):
+        w, v = self.page_box()
+        v.addWidget(heading(_("Installed"), 1.5))
+        apps = [self.by_id.get(x) or {"source": "flathub", "id": x, "name": x.split(".")[-1], "summary": x,
+                                      "cats": [], "icon": "", "shots": []} for x in sorted(self.have_flat)]
+        curated_arch = {e["id"]: e for sec in self.curated.values() for e in sec if e["source"] == "arch"}
+        apps += [self.resolve(e) for i, e in curated_arch.items() if i in self.have_arch]
+        if not apps:
+            v.addWidget(muted(_("Apps you install appear here.")))
+        v.addWidget(self.tiles(apps))
+        v.addStretch(1)
+        return w
+
+    def updates_page(self):
+        w, v = self.page_box()
+        v.addWidget(heading(_("Updates"), 1.5))
+        status = muted(_("Checking…"))
+        v.addWidget(status)
+        holder = QVBoxLayout()
+        v.addLayout(holder)
+        v.addStretch(1)
+
+        def got(ids):
+            ids = ids if isinstance(ids, list) else []
+            if not ids:
+                status.setText(_("All apps are up to date. System updates: Settings → Updates."))
+                return
+            status.setText(_("Updates available: {}").format(len(ids)))
+            btn = QPushButton(_("Update all"))
+            btn.setDefault(True)
+            btn.clicked.connect(self.update_all)
+            holder.addWidget(btn, 0, Qt.AlignLeft)
+            holder.addWidget(self.tiles([self.by_id.get(x) or {"source": "flathub", "id": x, "name": x, "summary": "",
+                                                               "cats": [], "icon": "", "shots": []} for x in ids]))
+        background(flatpak_updates, got)
+        return w
+
+    def update_all(self):
+        item = {"source": "flathub", "id": "", "name": _("Apps")}
+        dlg = Progress(self, item, False, [["flatpak", "update", "-y", "--noninteractive"]])
+        dlg.exec()
+        self.show_nav(self.nav.currentRow())
+
+    def detail_page(self, item):
+        w, v = self.page_box()
+        head = QHBoxLayout()
+        head.setSpacing(20)
+        icon = QLabel()
+        icon.setPixmap(app_icon(item, 112))
+        head.addWidget(icon, 0, Qt.AlignTop)
+        text = QVBoxLayout()
+        text.addWidget(heading(item["name"], 1.9))
+        text.addWidget(muted(item.get("dev") or ("Flathub" if item["source"] == "flathub" else "Arch Linux")))
+        summary = QLabel(item.get("summary", ""))
+        summary.setWordWrap(True)
+        text.addWidget(summary)
+        buttons = QHBoxLayout()
+        if self.is_installed(item):
+            open_btn = QPushButton(_("Open"))
+            open_btn.setDefault(True)
+            open_btn.clicked.connect(lambda: launch(item))
+            rm = QPushButton(_("Remove"))
+            rm.clicked.connect(lambda: self.run(item, True))
+            buttons.addWidget(open_btn)
+            buttons.addWidget(rm)
+        else:
+            get = QPushButton(_("Get"))
+            get.setDefault(True)
+            get.setFixedWidth(120)
+            get.clicked.connect(lambda: self.run(item, False))
+            buttons.addWidget(get)
+        buttons.addStretch(1)
+        text.addSpacing(6)
+        text.addLayout(buttons)
+        head.addLayout(text, 1)
+        v.addLayout(head)
+        if item.get("shots"):
+            strip = QHBoxLayout()
+            strip.setSpacing(12)
+            for url in item["shots"]:
+                lbl = QLabel(_("Loading…"))
+                lbl.setFixedSize(460, 288)
+                lbl.setAlignment(Qt.AlignCenter)
+                lbl.setStyleSheet("background: palette(base); border-radius: 10px; color: palette(placeholder-text);")
+                strip.addWidget(lbl)
+
+                def got(path, lbl=lbl):
+                    if isinstance(path, str):
+                        lbl.setPixmap(QPixmap(path).scaled(460, 288, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                    else:
+                        lbl.setText("")
+                background(lambda u=url: cached_image(u), got)
+            strip.addStretch(1)
+            shots = QWidget()
+            shots.setLayout(strip)
+            sc = QScrollArea()
+            sc.setWidget(shots)
+            sc.setWidgetResizable(True)
+            sc.setFrameShape(QFrame.NoFrame)
+            sc.setFixedHeight(310)
+            sc.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            v.addWidget(sc)
+        if item.get("desc"):
+            v.addWidget(heading(_("About this app"), 1.15))
+            d = QLabel(item["desc"])
+            d.setWordWrap(True)
+            d.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            v.addWidget(d)
+        info = []
+        if item.get("license"):
+            info.append(_("License") + ": " + item["license"].split("=")[0].replace("LicenseRef-proprietary",
+                                                                                     _("proprietary")))
+        info.append(_("Source") + ": " + ("Flathub" if item["source"] == "flathub" else "Arch Linux"))
+        if item.get("homepage"):
+            info.append(f'<a href="{item["homepage"]}">{_("Website")}</a>')
+        meta = QLabel("  ·  ".join(info))
+        meta.setOpenExternalLinks(True)
+        meta.setStyleSheet("color: palette(placeholder-text);")
+        v.addWidget(meta)
+        v.addStretch(1)
+        return w
+
+    # ---------- actions ----------
+    def open_app(self, item):
+        self.set_content(self.detail_page(item), push=True)
+
+    def primary_action(self, item):
+        if self.is_installed(item):
+            launch(item)
+        else:
+            self.run(item, False)
+
+    def run(self, item, remove):
+        if remove and QMessageBox.question(self, "App Store", _("Remove {}?").format(item["name"])) != QMessageBox.Yes:
+            return
+        dlg = Progress(self, item, remove)
+        dlg.exec()
+        if dlg.ok:
+            self.refresh_installed()
+            if self.history:          # on an app page: redraw it
+                self.set_content(self.detail_page(item))
+            else:
+                self.show_nav(self.nav.currentRow())
 
 
 def main():

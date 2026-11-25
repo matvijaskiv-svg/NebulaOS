@@ -149,7 +149,10 @@ def background(func, on_done):
             result = func()
         except Exception as e:  # report instead of crashing the app
             result = e
-        bridge.done.emit(result)
+        try:
+            bridge.done.emit(result)
+        except RuntimeError:      # the window that asked is already gone
+            pass
     threading.Thread(target=work, daemon=True).start()
 
 

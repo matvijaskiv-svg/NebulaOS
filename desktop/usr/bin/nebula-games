@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-"""Game Center (Gaming mode): your Steam library with covers, one-click play,
-turbo mode, power profile, FPS overlay and game launchers."""
+"""Game Center (Gaming mode), in the spirit of Steam Big Picture.
+
+A large banner of the selected game (Steam's hero art), Play button, size on disk,
+a row of covers below; tabs for Boost (turbo, power profile, FPS overlay) and
+Launchers (Heroic, Lutris, Bottles…).
+"""
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/nebulaos")
-from nebula_qt import _, Page, app, background, fit, in_terminal, run, tile  # noqa: E402
-from PySide6.QtCore import QSize, Qt  # noqa: E402
-from PySide6.QtGui import QPixmap  # noqa: E402
+from nebula_qt import _, Page, app, fit, in_terminal, run  # noqa: E402
+from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QPushButton,
+    QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QMainWindow, QPushButton, QScrollArea,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -21,8 +26,26 @@ STEAM_ROOTS = [HOME / ".local/share/Steam", HOME / ".steam/steam",
 NOT_GAMES = re.compile(r"Proton|Steamworks|Steam Linux Runtime|SteamVR|Redistributable", re.I)
 
 
+def human(n):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024:
+            return f"{n:.0f} {unit}" if unit in ("B", "KB") else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} PB"
+
+
+def art(root, appid, kind):
+    cache = root / "appcache/librarycache"
+    names = {"cover": ["library_600x900.jpg", "library_600x900_2x.jpg"], "hero": ["library_hero.jpg"],
+             "logo": ["logo.png"]}[kind]
+    for n in names:
+        for p in (cache / f"{appid}_{n}", cache / appid / n):
+            if p.exists():
+                return str(p)
+    return None
+
+
 def steam_library():
-    """[(appid, name, cover_path or None)] from Steam's app manifests."""
     games, seen = [], set()
     for root in STEAM_ROOTS:
         folders = [root / "steamapps"]
@@ -32,91 +55,199 @@ def steam_library():
         for folder in folders:
             for acf in folder.glob("appmanifest_*.acf"):
                 text = acf.read_text(errors="ignore")
-                appid = re.search(r'"appid"\s+"(\d+)"', text)
-                name = re.search(r'"name"\s+"([^"]+)"', text)
-                if not appid or not name or appid.group(1) in seen or NOT_GAMES.search(name.group(1)):
+                get = lambda k: (re.search(rf'"{k}"\s+"([^"]*)"', text) or [None, ""])[1]  # noqa: E731
+                appid, name = get("appid"), get("name")
+                if not appid or not name or appid in seen or NOT_GAMES.search(name):
                     continue
-                seen.add(appid.group(1))
-                cache = root / "appcache/librarycache"
-                cover = next((p for p in (cache / f"{appid.group(1)}_library_600x900.jpg",
-                                          cache / appid.group(1) / "library_600x900.jpg") if p.exists()), None)
-                games.append((appid.group(1), name.group(1), cover))
-    return sorted(games, key=lambda g: g[1].lower())
+                seen.add(appid)
+                games.append({"appid": appid, "name": name, "size": int(get("SizeOnDisk") or 0),
+                              "cover": art(root, appid, "cover"), "hero": art(root, appid, "hero"),
+                              "logo": art(root, appid, "logo")})
+    return sorted(games, key=lambda g: g["name"].lower())
 
 
-class Cover(QFrame):
-    def __init__(self, appid, name, cover):
+def play(game):
+    subprocess.Popen(["xdg-open", f"steam://rungameid/{game['appid']}"])
+
+
+class Hero(QWidget):
+    """The big banner: hero art fading into the window color, title or logo, Play."""
+
+    def __init__(self):
         super().__init__()
-        self.setObjectName("group")
-        self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(170, 290)
+        self.setMinimumHeight(340)
+        self.pix = None
         v = QVBoxLayout(self)
-        v.setContentsMargins(8, 8, 8, 8)
-        pic = QLabel()
-        pic.setAlignment(Qt.AlignCenter)
-        pic.setFixedSize(154, 230)
-        if cover:
-            pic.setPixmap(QPixmap(str(cover)).scaled(154, 230, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
-        else:
-            pic.setPixmap(tile("input-gaming", "#e5484d", 64).pixmap(64, 64))
-            pic.setStyleSheet("background: palette(alternate-base); border-radius: 8px;")
-        title = QLabel(name)
-        title.setWordWrap(True)
-        title.setAlignment(Qt.AlignCenter)
-        v.addWidget(pic)
-        v.addWidget(title)
-        self.appid = appid
+        v.setContentsMargins(36, 0, 36, 28)
+        v.addStretch(1)
+        self.logo = QLabel()
+        self.title = QLabel()
+        f = self.title.font()
+        f.setPointSizeF(f.pointSizeF() * 2.4)
+        f.setBold(True)
+        self.title.setFont(f)
+        self.title.setStyleSheet("color: white;")
+        self.meta = QLabel()
+        self.meta.setStyleSheet("color: rgba(255,255,255,0.75);")
+        row = QHBoxLayout()
+        self.play_btn = QPushButton("▶  " + _("Play"))
+        self.play_btn.setDefault(True)
+        self.play_btn.setMinimumSize(150, 42)
+        f2 = self.play_btn.font()
+        f2.setPointSizeF(f2.pointSizeF() * 1.15)
+        f2.setBold(True)
+        self.play_btn.setFont(f2)
+        row.addWidget(self.play_btn)
+        row.addSpacing(16)
+        row.addWidget(self.meta)
+        row.addStretch(1)
+        v.addWidget(self.logo)
+        v.addWidget(self.title)
+        v.addSpacing(10)
+        v.addLayout(row)
 
-    def mouseReleaseEvent(self, _e):
-        subprocess.Popen(["xdg-open", f"steam://rungameid/{self.appid}"])
+    def show_game(self, game):
+        self.pix = QPixmap(game["hero"]) if game.get("hero") else None
+        if game.get("logo"):
+            self.logo.setPixmap(QPixmap(game["logo"]).scaled(420, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.logo.show()
+            self.title.hide()
+        else:
+            self.logo.hide()
+            self.title.setText(game["name"])
+            self.title.show()
+        self.meta.setText(_("On disk: {}").format(human(game["size"])) if game["size"] else "")
+        self.update()
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        r = self.rect()
+        if self.pix and not self.pix.isNull():
+            scaled = self.pix.scaled(r.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            p.drawPixmap(r.x() - (scaled.width() - r.width()) // 2, 0, scaled)
+        else:
+            g = QLinearGradient(0, 0, r.width(), r.height())
+            g.setColorAt(0, QColor("#3a0a0e"))
+            g.setColorAt(1, QColor("#0d0d10"))
+            p.fillRect(r, g)
+        fade = QLinearGradient(0, r.height() * 0.35, 0, r.height())
+        base = self.palette().window().color()
+        clear = QColor(base)
+        clear.setAlpha(0)
+        fade.setColorAt(0, clear)
+        fade.setColorAt(1, base)
+        p.fillRect(r, fade)
+        p.end()
+
+
+class Cover(QLabel):
+    def __init__(self, center, game):
+        super().__init__()
+        self.center, self.game = center, game
+        self.setFixedSize(150, 225)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setAlignment(Qt.AlignCenter)
+        self.setWordWrap(True)
+        if game.get("cover"):
+            self.setPixmap(QPixmap(game["cover"]).scaled(150, 225, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+        else:
+            self.setText(game["name"])
+        self.select(False)
+
+    def select(self, on):
+        border = "3px solid palette(highlight)" if on else "3px solid transparent"
+        self.setStyleSheet(f"QLabel {{ border: {border}; border-radius: 8px; background: palette(base); }}")
+
+    def mousePressEvent(self, _e):
+        self.center.choose(self)
+
+    def mouseDoubleClickEvent(self, _e):
+        play(self.game)
 
 
 class Games(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(_("Game Center"))
-        self.nav = QListWidget()
-        self.nav.setObjectName("nav")
-        self.nav.setFixedWidth(220)
-        self.nav.setIconSize(QSize(24, 24))
-        self.stack = QStackedWidget()
-        for title, icon, color, page in (("Library", "input-gaming", "#e5484d", self.page_library),
-                                         ("Boost", "speedometer", "#ef4444", self.page_perf),
-                                         ("Launchers", "applications-games", "#0ea5e9", self.page_launchers)):
-            item = QListWidgetItem(tile(icon, color), _(title))
-            item.setSizeHint(QSize(0, 38))
-            self.nav.addItem(item)
-            self.stack.addWidget(page())
-        self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
-        body = QWidget()
-        lay = QHBoxLayout(body)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
-        lay.addWidget(self.nav)
-        lay.addWidget(self.stack, 1)
-        self.setCentralWidget(body)
-        self.nav.setCurrentRow(0)
-        fit(self, 1100, 720)
+        self.games = steam_library()
+        self.current = None
 
-    def page_library(self):
-        p = Page("Library", "Steam games on this computer. Click a cover to play.")
+        tabs = QHBoxLayout()
+        tabs.setContentsMargins(24, 14, 24, 8)
+        self.tab_group = QButtonGroup(self)
+        for i, name in enumerate(("Library", "Boost", "Launchers")):
+            b = QPushButton(_(name))
+            b.setCheckable(True)
+            b.setChecked(i == 0)
+            b.setMinimumWidth(130)
+            self.tab_group.addButton(b, i)
+            tabs.addWidget(b)
+        tabs.addStretch(1)
+        steam = QPushButton(_("Open Steam"))
+        steam.setFlat(True)
+        steam.clicked.connect(lambda: subprocess.Popen(["xdg-open", "steam://open/games"]))
+        tabs.addWidget(steam)
+
+        self.stack = QStackedWidget()
+        self.stack.addWidget(self.library())
+        self.stack.addWidget(self.boost())
+        self.stack.addWidget(self.launchers())
+        self.tab_group.idClicked.connect(self.stack.setCurrentIndex)
+
+        body = QWidget()
+        v = QVBoxLayout(body)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        v.addLayout(tabs)
+        v.addWidget(self.stack, 1)
+        self.setCentralWidget(body)
+        fit(self, 1240, 780)
+
+    # ---------- Library ----------
+    def library(self):
+        page = QWidget()
+        v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 0, 0)
+        if not self.games:
+            empty = Page("Library", "Install Steam and a game; they appear here")
+            g = empty.group()
+            g.action("Steam", "", "App Store", lambda: subprocess.Popen(["nebula-store"]), primary=True)
+            v.addWidget(empty)
+            return page
+        self.hero = Hero()
+        self.hero.play_btn.clicked.connect(lambda: self.current and play(self.current.game))
+        v.addWidget(self.hero)
+        label = QLabel(_("Your games") + f"  ·  {len(self.games)}")
+        f = label.font()
+        f.setBold(True)
+        label.setFont(f)
+        label.setContentsMargins(36, 0, 0, 0)
+        v.addWidget(label)
         host = QWidget()
         grid = QGridLayout(host)
-        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setContentsMargins(36, 8, 36, 24)
         grid.setSpacing(14)
-        games = steam_library()
-        for i, (appid, name, cover) in enumerate(games):
-            grid.addWidget(Cover(appid, name, cover), i // 5, i % 5)
-        if not games:
-            g = p.group()
-            g.action("No Steam games yet", "Install Steam and a game; they appear here", "App Store",
-                     lambda: subprocess.Popen(["nebula-store"]), primary=True)
-            g.action("Open Steam", "", "Open", lambda: subprocess.Popen(["xdg-open", "steam://open/games"]))
-        else:
-            p.add(host)
-        return p
+        self.covers = [Cover(self, g) for g in self.games]
+        for i, c in enumerate(self.covers):
+            grid.addWidget(c, i // 7, i % 7, Qt.AlignLeft)
+        grid.setColumnStretch(7, 1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(host)
+        v.addWidget(scroll, 1)
+        self.choose(self.covers[0])
+        return page
 
-    def page_perf(self):
+    def choose(self, cover):
+        if self.current:
+            self.current.select(False)
+        self.current = cover
+        cover.select(True)
+        self.hero.show_game(cover.game)
+
+    # ---------- Boost ----------
+    def boost(self):
         p = Page("Boost")
         g = p.group()
         g.action("Turbo mode", "Turns off desktop effects while you play", "Toggle", lambda: run("perf"))
@@ -134,17 +265,18 @@ class Games(QMainWindow):
         d.action("Graphics drivers", "NVIDIA, AMD or Intel", "Check", lambda: in_terminal("nebula", "drivers"))
         return p
 
-    def page_launchers(self):
+    # ---------- Launchers ----------
+    def launchers(self):
         p = Page("Launchers")
         g = p.group()
+        has_flatpak = shutil.which("flatpak") is not None
         for name, desc, flat in (("Steam", "", "com.valvesoftware.Steam"),
                                  ("Heroic", "Epic Games, GOG, Amazon", "com.heroicgameslauncher.hgl"),
                                  ("Lutris", "All games in one place", "net.lutris.Lutris"),
                                  ("Bottles", "Windows programs", "com.usebottles.bottles"),
                                  ("Prism Launcher", "Minecraft", "org.prismlauncher.PrismLauncher"),
                                  ("ProtonUp-Qt", "Proton-GE and Wine-GE", "net.davidotek.pupgui2")):
-            installed = subprocess.run(["flatpak", "info", flat], capture_output=True).returncode == 0 \
-                if Path("/usr/bin/flatpak").exists() else False
+            installed = has_flatpak and subprocess.run(["flatpak", "info", flat], capture_output=True).returncode == 0
             if installed:
                 g.action(name, desc, "Open", lambda f=flat: subprocess.Popen(["flatpak", "run", f]))
             else:
