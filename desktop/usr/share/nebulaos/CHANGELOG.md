@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.7.6
+- Each mode has its own window style, buttons, icons, cursor and font: macOS for Hacking, Garuda neon for Gaming, Ubuntu for Server
+
 ## 0.7.5
 - New macOS-style login screen, clean startup sound, plain app names and texts
 

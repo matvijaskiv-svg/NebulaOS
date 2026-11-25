@@ -114,7 +114,31 @@ apply() {
     plasma-apply-colorscheme "$scheme" >/dev/null 2>&1 || kcfg --file kdeglobals --group General --key ColorScheme "$scheme"
   fi
   kcfg --file kdeglobals --group General --key AccentColor "$(mode_var "$m" ACCENT_RGB)"
-  kcfg --file kdeglobals --group General --key font "$(mode_var "$m" FONT),10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+  # Fonts of the mode: interface, menus, toolbars, window titles.
+  local font; font=$(mode_var "$m" FONT)
+  for key in font menuFont toolBarFont; do
+    kcfg --file kdeglobals --group General --key "$key" "$font,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+  done
+  kcfg --file kdeglobals --group WM --key activeFont "$font,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1"
+  # Window frames and buttons: macOS (Hacking), neon Garuda (Gaming), Ubuntu Yaru (Server).
+  local deco; deco=$(mode_var "$m" DECORATION)
+  if [[ -n $deco && -d /usr/share/aurorae/themes/$deco ]]; then
+    kcfg --file kwinrc --group org.kde.kdecoration2 --key library org.kde.kwin.aurorae
+    kcfg --file kwinrc --group org.kde.kdecoration2 --key theme "__aurorae__svg__$deco"
+    kcfg --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnLeft "$(mode_var "$m" BUTTONS_LEFT)"
+    kcfg --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnRight "$(mode_var "$m" BUTTONS_RIGHT)"
+  fi
+  # Icons and cursor of the mode.
+  local icons cursor
+  icons=$(mode_var "$m" ICONS); cursor=$(mode_var "$m" CURSOR)
+  if [[ -n $icons && -d /usr/share/icons/$icons ]]; then
+    if [[ -x /usr/lib/plasma-changeicons ]] && in_plasma; then /usr/lib/plasma-changeicons "$icons" >/dev/null 2>&1 || true
+    else kcfg --file kdeglobals --group Icons --key Theme "$icons"; fi
+  fi
+  if [[ -n $cursor && -d /usr/share/icons/$cursor ]]; then
+    command -v plasma-apply-cursortheme >/dev/null && in_plasma && plasma-apply-cursortheme "$cursor" >/dev/null 2>&1 ||
+      kcfg --file kcminputrc --group Mouse --key cursorTheme "$cursor"
+  fi
   # Konsole: per-user copy of the NebulaOS profile with the mode's colors.
   prof=${XDG_DATA_HOME:-$HOME/.local/share}/konsole/Nebula.profile
   install -d "$(dirname "$prof")"

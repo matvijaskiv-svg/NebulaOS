@@ -17,7 +17,7 @@ fixed=JetBrainsMono Nerd Font,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 [WM]
 activeFont=Inter,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1
 
-[Icons][$i]
+[Icons]
 Theme=Papirus-Dark
 
 # The look can't be changed: these Settings pages are hidden and locked.
