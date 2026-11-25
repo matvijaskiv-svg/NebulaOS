@@ -51,7 +51,6 @@ kcm_kwin_effects.desktop=false
 
 # Panels and the desktop stay locked (no "Edit mode", no extra widgets).
 [KDE Action Restrictions][$i]
-plasma/plasmashell/unlockedDesktop=false
 plasma/allow_configure_when_locked=false
 plasma-desktop/add_activities=false
 ghns=false

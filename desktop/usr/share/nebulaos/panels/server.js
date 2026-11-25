@@ -18,3 +18,6 @@ dock.addWidget("org.kde.plasma.trash");
 var grid = dock.addWidget("org.kde.plasma.kickoff");
 grid.currentConfigGroup = ["General"];
 grid.writeConfig("icon", "view-app-grid-symbolic");
+
+// Lock the layout again: users cannot edit panels (NebulaOS can, through scripting).
+safe(function () { locked = true; });

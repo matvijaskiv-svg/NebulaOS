@@ -2,6 +2,7 @@
 // DOCK is filled in by nebula with the dock position (bottom / left / right) chosen by the user.
 var DOCK = "__DOCK__";
 function safe(f) { try { f(); } catch (e) { print("nebula: " + e); } }
+safe(function () { locked = false; });
 // Start clean: remove every panel, then build the mode's own layout.
 panels().forEach(function (p) { safe(function () { p.remove(); }); });
 var BASE = [

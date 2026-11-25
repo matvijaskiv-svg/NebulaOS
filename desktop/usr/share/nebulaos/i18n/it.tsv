@@ -589,3 +589,6 @@ Text:	Testo:
 NebulaOS %s is on hold by the NebulaOS team; other packages are updated.\n	NebulaOS %s è sospeso dal team NebulaOS; gli altri pacchetti sono aggiornati.\n
 Support	Supporto
 Close	Chiudi
+Keyboard layouts (switch with Alt+Shift):	Layout di tastiera (cambia con Alt+Shift):
+More layouts and options	Altri layout e opzioni
+Layouts: %s (switch: Alt+Shift)\n	Layout: %s (cambia: Alt+Shift)\n

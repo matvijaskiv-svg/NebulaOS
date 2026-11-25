@@ -13,3 +13,6 @@ safe(function () {
 bar.addWidget("org.kde.plasma.systemtray");
 addClock(bar, true);
 bar.addWidget("org.kde.plasma.showdesktop");
+
+// Lock the layout again: users cannot edit panels (NebulaOS can, through scripting).
+safe(function () { locked = true; });

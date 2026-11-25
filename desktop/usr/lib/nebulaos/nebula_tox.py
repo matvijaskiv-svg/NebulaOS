@@ -29,9 +29,14 @@ MAX_DATA = 12 * 1024 * 1024               # one data item (photo, file) at most 
 
 NODES_URL = "https://nodes.tox.chat/json"
 FALLBACK_NODES = [
-    ("tox.abilinski.com", 33445, "10C00EB250C3233E343E2AEBA07115A5C28920E9C8D29492F6D00B29049EDC7E"),
     ("144.217.167.73", 33445, "7E5668E0EE09E19F320AD47902419331FFEE147BB3606769CFBE921A2A2FD34C"),
-    ("tox.kurnevsky.net", 33445, "82EF82BA33445A1F91A7DB27189ECFC0C013E06E3DA71F588ED692BED625EC23"),
+    ("tox1.mf-net.eu", 33445, "B3E5FA80DC8EBD1149AD2AB35ED8B85BD546DEDE261CA593234C619249419506"),
+    ("139.162.110.188", 33445, "F76A11284547163889DDC89A7738CF271797BF5E5E220643E97AD3C7E7903D55"),
+    ("tox2.mf-net.eu", 33445, "70EA214FDE161E7432530605213F18F7427DC773E276B3E317A07531F548545F"),
+    ("172.105.109.31", 33445, "D46E97CF995DC1820B92B7D899E152A217D36ABE22730FEA4B6BF1BFC06C617C"),
+    ("172.104.215.182", 33445, "DA2BD927E01CD05EBCC2574EBE5BEBB10FF59AE0B2105A7D1E2B40E49BB20239"),
+    ("tox.initramfs.io", 33445, "3F0A45A268367C1BEA652F258C85F4A66DA76BCAA667A49E770BCC4917AB6A25"),
+    ("tox3.mf-net.eu", 33445, "F4FC9398B7167668ED2BCF85634E04D4CDCDD2F95DA5F305BD234888B6E6A771"),
 ]
 
 lib = C.CDLL("libtoxcore.so.2") if os.path.exists("/usr/lib/libtoxcore.so.2") else C.CDLL("libtoxcore.so")
@@ -183,9 +188,13 @@ class Tox:
     # ---------- network ----------
     def bootstrap(self, nodes):
         for host, port, key in nodes:
-            k = bytes.fromhex(key)
+            try:
+                k = bytes.fromhex(key)
+            except ValueError:
+                continue
             f["tox_bootstrap"](self.tox, host.encode(), port, k, None)
             f["tox_add_tcp_relay"](self.tox, host.encode(), port, k, None)
+            f["tox_add_tcp_relay"](self.tox, host.encode(), 443, k, None)   # works behind strict firewalls
 
     def iterate(self):
         f["tox_iterate"](self.tox, None)

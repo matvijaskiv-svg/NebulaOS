@@ -23,6 +23,7 @@
 #   nebula doctor                      check the system and suggest fixes
 #   nebula battery status|on|off       keep the battery at 80% (longer life)
 #   nebula keys                        keyboard shortcuts
+#   nebula keyboard [us,ru,ua,it]      keyboard layouts (switch with Alt+Shift)
 #   nebula news [--notify]             NebulaOS news and announcements
 #   nebula chat | admin                Nebula Chat, admin panel
 #   nebula hub | store | version
@@ -70,7 +71,12 @@ spawn() { setsid -f "$@" >/dev/null 2>&1 < /dev/null; }
 kcfg() { command -v kwriteconfig6 >/dev/null && kwriteconfig6 "$@" || true; }
 qdbus_() { local q; q=$(command -v qdbus6 || command -v qdbus || true); [[ -n $q ]] && "$q" "$@" 2>/dev/null || true; }
 in_plasma() { [[ ${XDG_CURRENT_DESKTOP:-} == *KDE* ]] && pgrep -x plasmashell >/dev/null; }
-plasma_js() { qdbus_ org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$1" >/dev/null; }
+plasma_js() {
+  local out
+  out=$(qdbus_ org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$1" 2>&1) || {
+    printf 'nebula: Plasma refused the change: %s
+' "$out" >&2; logger -t nebula "plasma script failed: $out"; return 1; }
+}
 
 apply_wallpaper() {
   local w; w=$(wallpaper_for "$1")
@@ -113,10 +119,13 @@ apply() {
   prof=${XDG_DATA_HOME:-$HOME/.local/share}/konsole/Nebula.profile
   install -d "$(dirname "$prof")"
   sed "s/^ColorScheme=.*/ColorScheme=$scheme/" /usr/share/konsole/Nebula.profile > "$prof"
-  # Keyboard layouts follow the interface language.
-  case $(nebula_lang) in
-    ru) layout=us,ru ;; uk) layout=us,ua ;; it) layout=it,us ;; *) layout=us ;;
-  esac
+  # Keyboard layouts: the user's own list (nebula keyboard), else the interface language.
+  layout=$(cat "$CONF/keyboard" 2>/dev/null || true)
+  if [[ -z $layout ]]; then
+    case $(nebula_lang) in
+      ru) layout=us,ru ;; uk) layout=us,ua ;; it) layout=it,us ;; *) layout=us ;;
+    esac
+  fi
   kcfg --file kxkbrc --group Layout --key Use true
   kcfg --file kxkbrc --group Layout --key LayoutList "$layout"
   kcfg --file kxkbrc --group Layout --key Options grp:alt_shift_toggle
@@ -687,6 +696,24 @@ else:
 PY
 }
 
+# ---------- Keyboard layouts ----------
+cmd_keyboard() {
+  local list=${1:-}
+  if [[ -z $list ]]; then
+    printf "$(t 'Layouts: %s (switch: Alt+Shift)\n')" "$(kreadconfig6 --file kxkbrc --group Layout --key LayoutList 2>/dev/null || echo us)"
+    return 0
+  fi
+  [[ $list =~ ^[a-z]{2,3}(,[a-z]{2,3}){0,5}$ ]] || die 'keyboard: for example  nebula keyboard us,ru,ua'
+  install -d "$CONF"
+  printf '%s\n' "$list" > "$CONF/keyboard"
+  kcfg --file kxkbrc --group Layout --key Use true
+  kcfg --file kxkbrc --group Layout --key LayoutList "$list"
+  kcfg --file kxkbrc --group Layout --key Options grp:alt_shift_toggle
+  kcfg --file kxkbrc --group Layout --key ResetOldOptions true
+  qdbus_ org.kde.keyboard /Layouts org.kde.KeyboardLayouts.reloadConfig 2>/dev/null || true
+  printf "$(t 'Layouts: %s (switch: Alt+Shift)\n')" "$list"
+}
+
 case ${1:-} in
   apply) shift; apply "$@" ;;
   mode) shift; cmd_mode "$@" ;;
@@ -716,8 +743,9 @@ case ${1:-} in
   doctor) cmd_doctor ;;
   battery) shift; cmd_battery "$@" ;;
   keys) cmd_keys ;;
+  keyboard) shift; cmd_keyboard "$@" ;;
   news) shift; cmd_news "$@" ;;
   chat) exec nebula-chat ;;
   admin) command -v nebula-admin >/dev/null || die "the admin panel is not installed (tools/admin in the NebulaOS repository)"; exec nebula-admin ;;
-  *) sed -n '2,32s/^# \{0,1\}//p' "$0"; exit 2 ;;
+  *) sed -n '2,33s/^# \{0,1\}//p' "$0"; exit 2 ;;
 esac

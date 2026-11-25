@@ -619,3 +619,6 @@ Text:	Текст:
 NebulaOS %s is on hold by the NebulaOS team; other packages are updated.\n	NebulaOS %s притримано командою NebulaOS; інші пакети оновлено.\n
 Support	Підтримка
 Close	Закрити
+Keyboard layouts (switch with Alt+Shift):	Розкладки клавіатури (перемикання Alt+Shift):
+More layouts and options	Інші розкладки й параметри
+Layouts: %s (switch: Alt+Shift)\n	Розкладки: %s (перемикання: Alt+Shift)\n

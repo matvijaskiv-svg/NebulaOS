@@ -478,7 +478,18 @@ class Settings(QMainWindow):
         p = Page("Keyboard")
         g = p.group()
         layouts = out("kreadconfig6", "--file", "kxkbrc", "--group", "Layout", "--key", "LayoutList") or "us"
-        g.action("Layouts", layouts.replace(",", ", ").upper() + " · Alt+Shift", "Settings…", lambda: kcm("kcm_keyboard"))
+        current = [x for x in layouts.split(",") if x]
+        g.widget(QLabel(_("Keyboard layouts (switch with Alt+Shift):")))
+        names = [("us", "English (US)"), ("ru", "Русский"), ("ua", "Українська"), ("it", "Italiano"),
+                 ("de", "Deutsch"), ("fr", "Français"), ("es", "Español"), ("pl", "Polski")]
+        boxes = {}
+
+        def save_layouts(_on=None):
+            chosen = [code for code, _n in names if boxes[code].isChecked()] or ["us"]
+            run("keyboard", ",".join(chosen))
+        for code, label in names:
+            boxes[code] = g.switch(label, code.upper(), code in current, save_layouts)
+        g.action("More layouts and options", "", "Settings…", lambda: kcm("kcm_keyboard"))
         g.action("Shortcuts", "Super — apps menu · Super+H — Settings", "Settings…", lambda: kcm("kcm_keys"))
         g.action("All NebulaOS shortcuts", "Super+/", "Show", lambda: subprocess.Popen(["nebula", "keys"]))
         return p

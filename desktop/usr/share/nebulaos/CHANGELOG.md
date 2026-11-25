@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.7.3
+- Fixed: wallpaper and panels change again, keyboard layouts are kept, languages work, Nebula Chat reconnects, the assistant knows NebulaOS
+
 ## 0.7.2
 - Panels change shape and style with the mode: glass macOS dock, solid Garuda taskbar, Ubuntu side dock
 

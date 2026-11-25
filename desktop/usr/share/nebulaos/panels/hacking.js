@@ -14,3 +14,6 @@ addTasks(dock, launchers(["applications:org.wireshark.Wireshark.desktop", "appli
                           "applications:nebula-store.desktop"]), true);
 dock.addWidget("org.kde.plasma.marginsseparator");
 dock.addWidget("org.kde.plasma.trash");
+
+// Lock the layout again: users cannot edit panels (NebulaOS can, through scripting).
+safe(function () { locked = true; });

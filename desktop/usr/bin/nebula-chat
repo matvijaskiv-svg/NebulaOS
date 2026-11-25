@@ -176,7 +176,11 @@ class Chat(QMainWindow):
         self.typing_off.setSingleShot(True)
         self.typing_off.timeout.connect(lambda: self.current and self.current[0] == "u"
                                         and self.tox.typing(self.current[2:], False))
+        self.connected = False
         background(lambda: nebula_tox.load_nodes(NODES), self.got_nodes)
+        self.retry = QTimer(self)
+        self.retry.timeout.connect(self.retry_connect)
+        self.retry.start(30000)
         QTimer.singleShot(4000, self.join_official)
         fit(self, 1040, 700)
 
@@ -585,7 +589,13 @@ class Chat(QMainWindow):
 
     # =============== Tox events ===============
     def got_nodes(self, nodes):
-        self.tox.bootstrap(nodes if isinstance(nodes, list) and nodes else nebula_tox.FALLBACK_NODES)
+        good = nodes if isinstance(nodes, list) and nodes else []
+        self.tox.bootstrap(good + nebula_tox.FALLBACK_NODES)
+
+    def retry_connect(self):
+        """Offline (e.g. started before Wi-Fi was up): bootstrap again with a fresh node list."""
+        if not self.connected:
+            background(lambda: nebula_tox.load_nodes(NODES), self.got_nodes)
 
     def tick(self):
         self.timer.setInterval(max(20, min(self.tox.iterate(), 100)))
@@ -595,6 +605,7 @@ class Chat(QMainWindow):
         self.write_stats()
 
     def ev_online(self, on):
+        self.connected = on
         self.status_text.setText(_("Online — encrypted, peer-to-peer") if on else _("Connecting…"))
 
     def ev_friend_status(self, pk, on):
