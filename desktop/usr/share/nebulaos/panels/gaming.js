@@ -4,7 +4,7 @@ var bar = dockPanel("bottom", 2.6, true, true);
 look(bar, "opaque");                       // solid floating bar with rounded ends
 addMenu(bar, "nebulaos");
 bar.addWidget("org.kde.plasma.marginsseparator");
-addTasks(bar, launchers(["applications:steam.desktop", "applications:net.lutris.Lutris.desktop",
+addTasks(bar, launchers(["applications:nebula-games.desktop", "applications:com.valvesoftware.Steam.desktop", "applications:steam.desktop", "applications:net.lutris.Lutris.desktop",
                          "applications:discord.desktop", "applications:nebula-store.desktop"]), true);
 bar.addWidget("org.kde.plasma.panelspacer");
 safe(function () {

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Toolkit
+Name[ru]=Инструменты
+Name[uk]=Інструменти
+Name[it]=Strumenti
+Comment=Privacy, labs and network tools
+Exec=nebula-toolkit
+Icon=utilities-terminal
+Categories=Network;Security;

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/nebulaos")
-from nebula_qt import _, QIcon, app, background, fit  # noqa: E402
+from nebula_qt import _, QIcon, app, background, fit, tile  # noqa: E402
 from PySide6.QtCore import QProcess, QSize, Qt  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
@@ -21,10 +21,11 @@ from PySide6.QtWidgets import (  # noqa: E402
 
 CATALOG = Path("/usr/share/nebulaos/store.json")
 FLATHUB = "https://dl.flathub.org/repo/flathub.flatpakrepo"
-SECTION_ICONS = {"Popular": "starred", "Games": "applications-games", "Chat and internet": "applications-internet",
-                 "Browsers": "internet-web-browser", "Media and creativity": "applications-multimedia",
-                 "Development": "applications-development", "Office and study": "applications-office",
-                 "Security": "security-high", "System tools": "applications-system"}
+SECTION_ICONS = {"Popular": ("starred", "#f59e0b"), "Games": ("input-gaming", "#8b5cf6"),
+                 "Chat and internet": ("mail-message", "#0ea5e9"), "Browsers": ("internet-web-browser", "#2563eb"),
+                 "Media and creativity": ("applications-multimedia", "#ec4899"),
+                 "Development": ("applications-development", "#14b8a6"), "Office and study": ("x-office-document", "#f97316"),
+                 "Security": ("security-high", "#dc2626"), "System tools": ("preferences-system", "#64748b")}
 PERCENT = re.compile(r"(\d{1,3})%")
 
 
@@ -266,11 +267,16 @@ class Store(QMainWindow):
 
         self.nav = QListWidget()
         self.nav.setObjectName("nav")
-        self.nav.setFixedWidth(210)
+        self.nav.setFixedWidth(230)
+        self.nav.setIconSize(QSize(24, 24))
         for section in self.catalog:
-            self.nav.addItem(QListWidgetItem(QIcon.fromTheme(SECTION_ICONS.get(section, "applications-other")),
-                                             _(section)))
-        self.nav.addItem(QListWidgetItem(QIcon.fromTheme("checkmark", QIcon.fromTheme("dialog-ok")), _("Installed")))
+            glyph, color = SECTION_ICONS.get(section, ("applications-other", "#64748b"))
+            item = QListWidgetItem(tile(glyph, color), _(section))
+            item.setSizeHint(QSize(0, 38))
+            self.nav.addItem(item)
+        item = QListWidgetItem(tile("checkmark", "#16a34a"), _("Installed"))
+        item.setSizeHint(QSize(0, 38))
+        self.nav.addItem(item)
         self.nav.currentRowChanged.connect(self.show_section)
 
         self.search = QLineEdit()

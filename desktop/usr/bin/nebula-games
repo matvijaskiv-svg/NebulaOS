@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""Game Center (Gaming mode): your Steam library with covers, one-click play,
+turbo mode, power profile, FPS overlay and game launchers."""
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, Page, app, background, fit, in_terminal, run, tile  # noqa: E402
+from PySide6.QtCore import QSize, Qt  # noqa: E402
+from PySide6.QtGui import QPixmap  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QPushButton,
+    QStackedWidget, QVBoxLayout, QWidget,
+)
+
+HOME = Path.home()
+STEAM_ROOTS = [HOME / ".local/share/Steam", HOME / ".steam/steam",
+               HOME / ".var/app/com.valvesoftware.Steam/.local/share/Steam"]
+NOT_GAMES = re.compile(r"Proton|Steamworks|Steam Linux Runtime|SteamVR|Redistributable", re.I)
+
+
+def steam_library():
+    """[(appid, name, cover_path or None)] from Steam's app manifests."""
+    games, seen = [], set()
+    for root in STEAM_ROOTS:
+        folders = [root / "steamapps"]
+        vdf = root / "steamapps/libraryfolders.vdf"
+        if vdf.exists():
+            folders += [Path(p) / "steamapps" for p in re.findall(r'"path"\s+"([^"]+)"', vdf.read_text(errors="ignore"))]
+        for folder in folders:
+            for acf in folder.glob("appmanifest_*.acf"):
+                text = acf.read_text(errors="ignore")
+                appid = re.search(r'"appid"\s+"(\d+)"', text)
+                name = re.search(r'"name"\s+"([^"]+)"', text)
+                if not appid or not name or appid.group(1) in seen or NOT_GAMES.search(name.group(1)):
+                    continue
+                seen.add(appid.group(1))
+                cache = root / "appcache/librarycache"
+                cover = next((p for p in (cache / f"{appid.group(1)}_library_600x900.jpg",
+                                          cache / appid.group(1) / "library_600x900.jpg") if p.exists()), None)
+                games.append((appid.group(1), name.group(1), cover))
+    return sorted(games, key=lambda g: g[1].lower())
+
+
+class Cover(QFrame):
+    def __init__(self, appid, name, cover):
+        super().__init__()
+        self.setObjectName("group")
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(170, 290)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(8, 8, 8, 8)
+        pic = QLabel()
+        pic.setAlignment(Qt.AlignCenter)
+        pic.setFixedSize(154, 230)
+        if cover:
+            pic.setPixmap(QPixmap(str(cover)).scaled(154, 230, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+        else:
+            pic.setPixmap(tile("input-gaming", "#7b2ff7", 64).pixmap(64, 64))
+            pic.setStyleSheet("background: palette(alternate-base); border-radius: 8px;")
+        title = QLabel(name)
+        title.setWordWrap(True)
+        title.setAlignment(Qt.AlignCenter)
+        v.addWidget(pic)
+        v.addWidget(title)
+        self.appid = appid
+
+    def mouseReleaseEvent(self, _e):
+        subprocess.Popen(["xdg-open", f"steam://rungameid/{self.appid}"])
+
+
+class Games(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("Game Center"))
+        self.nav = QListWidget()
+        self.nav.setObjectName("nav")
+        self.nav.setFixedWidth(220)
+        self.nav.setIconSize(QSize(24, 24))
+        self.stack = QStackedWidget()
+        for title, icon, color, page in (("Library", "input-gaming", "#7b2ff7", self.page_library),
+                                         ("Boost", "speedometer", "#ef4444", self.page_perf),
+                                         ("Launchers", "applications-games", "#0ea5e9", self.page_launchers)):
+            item = QListWidgetItem(tile(icon, color), _(title))
+            item.setSizeHint(QSize(0, 38))
+            self.nav.addItem(item)
+            self.stack.addWidget(page())
+        self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
+        body = QWidget()
+        lay = QHBoxLayout(body)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(self.nav)
+        lay.addWidget(self.stack, 1)
+        self.setCentralWidget(body)
+        self.nav.setCurrentRow(0)
+        fit(self, 1100, 720)
+
+    def page_library(self):
+        p = Page("Library", "Steam games on this computer. Click a cover to play.")
+        host = QWidget()
+        grid = QGridLayout(host)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(14)
+        games = steam_library()
+        for i, (appid, name, cover) in enumerate(games):
+            grid.addWidget(Cover(appid, name, cover), i // 5, i % 5)
+        if not games:
+            g = p.group()
+            g.action("No Steam games yet", "Install Steam and a game; they appear here", "App Store",
+                     lambda: subprocess.Popen(["nebula-store"]), primary=True)
+            g.action("Open Steam", "", "Open", lambda: subprocess.Popen(["xdg-open", "steam://open/games"]))
+        else:
+            p.add(host)
+        return p
+
+    def page_perf(self):
+        p = Page("Boost")
+        g = p.group()
+        g.action("Turbo mode", "Turns off desktop effects while you play", "Toggle", lambda: run("perf"))
+        profiles = ["power-saver", "balanced", "performance"]
+        names = ["Power saver", "Balanced", "Performance"]
+        cur = run("power", "get")[1].strip()
+        g.combo("Power profile", names, profiles.index(cur) if cur in profiles else 1,
+                lambda i: run("power", profiles[i]))
+        mango = (HOME / ".config/environment.d/90-mangohud.conf").exists()
+        g.switch("FPS counter in games (MangoHud)", "After re-login. Hide in a game: Shift_R+F12", mango,
+                 lambda on: run("game", "mangohud", "on" if on else "off"))
+        g.switch("Switch to Gaming mode when a game starts", "", "on" in run("automode", "status")[1],
+                 lambda on: run("automode", "on" if on else "off"))
+        d = p.group("Drivers")
+        d.action("Graphics drivers", "NVIDIA, AMD or Intel", "Check", lambda: in_terminal("nebula", "drivers"))
+        return p
+
+    def page_launchers(self):
+        p = Page("Launchers")
+        g = p.group()
+        for name, desc, flat in (("Steam", "", "com.valvesoftware.Steam"),
+                                 ("Heroic", "Epic Games, GOG, Amazon", "com.heroicgameslauncher.hgl"),
+                                 ("Lutris", "All games in one place", "net.lutris.Lutris"),
+                                 ("Bottles", "Windows programs", "com.usebottles.bottles"),
+                                 ("Prism Launcher", "Minecraft", "org.prismlauncher.PrismLauncher"),
+                                 ("ProtonUp-Qt", "Proton-GE and Wine-GE", "net.davidotek.pupgui2")):
+            installed = subprocess.run(["flatpak", "info", flat], capture_output=True).returncode == 0 \
+                if Path("/usr/bin/flatpak").exists() else False
+            if installed:
+                g.action(name, desc, "Open", lambda f=flat: subprocess.Popen(["flatpak", "run", f]))
+            else:
+                g.action(name, desc, "Get", lambda: subprocess.Popen(["nebula-store"]))
+        return p
+
+
+def main():
+    a = app("nebula-games", "input-gaming")
+    w = Games()
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

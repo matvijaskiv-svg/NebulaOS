@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Server Panel
+Name[ru]=Панель сервера
+Name[uk]=Панель сервера
+Name[it]=Pannello server
+Comment=Services, ready-made servers and firewall
+Exec=nebula-serverpanel
+Icon=network-server
+Categories=System;

@@ -150,8 +150,8 @@ Memory	Память
 Disk /	Диск /
 CPU	Процессор
 Saver	Экономия
-Balanced	Баланс
-Performance	Максимум
+Balanced	Сбалансированный
+Performance	Производительность
 Welcome to NebulaOS	Добро пожаловать в NebulaOS
 Back	Назад
 Next	Далее
@@ -712,3 +712,61 @@ Internet, drivers, sound, disk, services	Интернет, драйверы, з�
 NebulaOS and all apps. A snapshot is taken first.	NebulaOS и все программы. Сначала делается снимок системы.
 Runs on this computer, offline. Super+A.	Работает на этом компьютере, без интернета. Super+A.
 Messages	Сообщения
+Game Center	Игровой центр
+Library	Библиотека
+Steam games on this computer. Click a cover to play.	Игры Steam на этом компьютере. Нажмите на обложку, чтобы играть.
+Boost	Ускорение
+Turns off desktop effects while you play	Отключает эффекты рабочего стола во время игры
+Power saver	Экономия энергии
+FPS counter in games (MangoHud)	Счётчик FPS в играх (MangoHud)
+After re-login. Hide in a game: Shift_R+F12	После повторного входа. Скрыть в игре: Shift_R+F12
+Switch to Gaming mode when a game starts	Включать «Гейминг», когда запускается игра
+Drivers	Драйверы
+Launchers	Лаунчеры
+No Steam games yet	Игр Steam пока нет
+Install Steam and a game; they appear here	Установите Steam и игру — они появятся здесь
+Open Steam	Открыть Steam
+All games in one place	Все игры в одном месте
+Windows programs	Программы для Windows
+Proton-GE and Wine-GE	Proton-GE и Wine-GE
+Get	Получить
+Toolkit	Инструменты
+Privacy	Приватность
+Anonymous connection on 127.0.0.1:9050; run an app through it with torsocks	Анонимное соединение на 127.0.0.1:9050; запуск программы через него: torsocks
+A new hardware address for Wi-Fi and Ethernet	Новый аппаратный адрес для Wi-Fi и Ethernet
+Labs	Стенды
+Practice targets that run in Docker and are reachable only from this computer.	Учебные цели в Docker, доступные только с этого компьютера.
+Stop a lab	Остановить стенд
+Stop…	Остановить…
+Labs need Docker	Для стендов нужен Docker
+Use them only on your own devices and labs.	Используйте только на своих устройствах и стендах.
+Look at network traffic	Просмотр сетевого трафика
+Scan your own network	Сканирование своей сети
+Test your own web apps	Проверка своих веб-приложений
+Exploit framework for labs	Фреймворк эксплойтов для стендов
+Check password strength	Проверка стойкости паролей
+Password recovery on GPU	Восстановление паролей на видеокарте
+Local address	Локальный адрес
+Public address:	Внешний адрес:
+Copy	Копировать
+Interfaces and routes	Интерфейсы и маршруты
+Open ports on this computer	Открытые порты на этом компьютере
+Server Panel	Панель сервера
+Load	Нагрузка
+Processor: {}%	Процессор: {}%
+Memory: {}%	Память: {}%
+Services	Службы
+Full web admin panel: logs, users, storage	Полная веб-панель: журналы, пользователи, диски
+Turning a service on also opens its port in the firewall.	При включении службы её порт открывается в файрволе.
+Remote terminal access (port 22)	Удалённый доступ к терминалу (порт 22)
+Web admin panel on port 9090	Веб-панель на порту 9090
+Web server	Веб-сервер
+nginx on port 80	nginx на порту 80
+Database	База данных
+Each one runs in Docker and starts with the computer.	Каждый работает в Docker и запускается вместе с компьютером.
+File server	Файловый сервер
+Shared folders for your network	Общие папки для вашей сети
+Films and music for your devices	Фильмы и музыка для ваших устройств
+Play with friends	Играйте с друзьями
+Block incoming connections except open services	Блокировать входящие подключения, кроме открытых служб
+Rules	Правила

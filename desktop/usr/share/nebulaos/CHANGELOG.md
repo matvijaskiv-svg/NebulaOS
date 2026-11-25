@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.7.7
+- New apps: Game Center, Toolkit and Server Panel; each mode styles the NebulaOS apps its own way
+
 ## 0.7.6
 - Each mode has its own window style, buttons, icons, cursor and font: macOS for Hacking, Garuda neon for Gaming, Ubuntu for Server
 

@@ -85,7 +85,7 @@ File Browser, port 8080	File Browser, porta 8080
 Jellyfin, port 8096	Jellyfin, porta 8096
 Minecraft server	Server Minecraft
 Java Edition, port 25565	Java Edition, porta 25565
-Deploy	Distribuisci
+Deploy	Avvia
 System	Sistema
 Graphics drivers	Driver grafici
 Auto-detect NVIDIA / AMD / Intel	Rilevamento automatico NVIDIA / AMD / Intel
@@ -618,3 +618,58 @@ Internet, drivers, sound, disk, services	Internet, driver, audio, disco, servizi
 NebulaOS and all apps. A snapshot is taken first.	NebulaOS e tutte le app. Prima si crea un'istantanea.
 Runs on this computer, offline. Super+A.	Funziona su questo computer, offline. Super+A.
 Messages	Messaggi
+Game Center	Centro giochi
+Library	Libreria
+Steam games on this computer. Click a cover to play.	Giochi Steam su questo computer. Clicca una copertina per giocare.
+Boost	Prestazioni
+Turns off desktop effects while you play	Disattiva gli effetti del desktop mentre giochi
+Power saver	Risparmio energetico
+FPS counter in games (MangoHud)	Contatore FPS nei giochi (MangoHud)
+After re-login. Hide in a game: Shift_R+F12	Dopo un nuovo accesso. Nascondi nel gioco: Shift_R+F12
+Switch to Gaming mode when a game starts	Passa a Gaming quando parte un gioco
+Drivers	Driver
+Launchers	Launcher
+No Steam games yet	Ancora nessun gioco Steam
+Install Steam and a game; they appear here	Installa Steam e un gioco: appariranno qui
+Open Steam	Apri Steam
+All games in one place	Tutti i giochi in un posto
+Windows programs	Programmi Windows
+Proton-GE and Wine-GE	Proton-GE e Wine-GE
+Get	Ottieni
+Toolkit	Strumenti
+Anonymous connection on 127.0.0.1:9050; run an app through it with torsocks	Connessione anonima su 127.0.0.1:9050; avvia un'app tramite torsocks
+A new hardware address for Wi-Fi and Ethernet	Nuovo indirizzo hardware per Wi-Fi ed Ethernet
+Labs	Laboratori
+Practice targets that run in Docker and are reachable only from this computer.	Bersagli di pratica in Docker, raggiungibili solo da questo computer.
+Stop a lab	Ferma un laboratorio
+Stop…	Ferma…
+Labs need Docker	I laboratori richiedono Docker
+Use them only on your own devices and labs.	Usali solo sui tuoi dispositivi e laboratori.
+Look at network traffic	Analizza il traffico di rete
+Scan your own network	Scansiona la tua rete
+Test your own web apps	Testa le tue app web
+Exploit framework for labs	Framework di exploit per i laboratori
+Check password strength	Verifica la robustezza delle password
+Password recovery on GPU	Recupero password su GPU
+Local address	Indirizzo locale
+Public address:	Indirizzo pubblico:
+Copy	Copia
+Interfaces and routes	Interfacce e rotte
+Open ports on this computer	Porte aperte su questo computer
+Server Panel	Pannello server
+Load	Carico
+Processor: {}%	Processore: {}%
+Memory: {}%	Memoria: {}%
+Services	Servizi
+Full web admin panel: logs, users, storage	Pannello web completo: log, utenti, dischi
+Turning a service on also opens its port in the firewall.	Attivando un servizio si apre anche la sua porta nel firewall.
+Remote terminal access (port 22)	Accesso remoto al terminale (porta 22)
+Web admin panel on port 9090	Pannello web sulla porta 9090
+Web server	Server web
+nginx on port 80	nginx sulla porta 80
+Each one runs in Docker and starts with the computer.	Ognuno gira in Docker e parte con il computer.
+Shared folders for your network	Cartelle condivise per la tua rete
+Films and music for your devices	Film e musica per i tuoi dispositivi
+Play with friends	Gioca con gli amici
+Block incoming connections except open services	Blocca le connessioni in entrata tranne i servizi aperti
+Rules	Regole

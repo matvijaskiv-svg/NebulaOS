@@ -42,32 +42,63 @@ def app(desktop_id, icon="nebulaos"):
     return a
 
 
-# Cards and lists in the System Settings look; colors come from the mode's palette.
-STYLE = """
-QFrame#group {
-    background: palette(base);
-    border: 1px solid palette(midlight);
-    border-radius: 12px;
+# Look of NebulaOS apps. Colors come from the mode's palette; shapes depend on the mode:
+# Hacking — macOS (soft corners, pill buttons), Gaming — Garuda neon (accent outlines,
+# gradient selection), Server — Ubuntu Yaru (small corners, solid orange accents).
+def current_mode():
+    import os
+    for path in (os.path.expanduser("~/.config/nebulaos/mode"), "/etc/nebulaos/default-mode"):
+        try:
+            m = open(path).read().strip()
+            if m in ("gaming", "hacking", "server"):
+                return m
+        except OSError:
+            pass
+    return "gaming"
+
+
+MODE_SHAPE = {
+    "hacking": dict(card=14, ctl=9, btn=9, nav=9, sel="palette(highlight)", sel_text="#1e1e2e",
+                    card_border="1px solid palette(midlight)", btn_border="1px solid palette(midlight)"),
+    "gaming": dict(card=10, ctl=8, btn=8, nav=8, sel_text="#ffffff",
+                   sel="qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7b2ff7, stop:1 #00b8ff)",
+                   card_border="1px solid rgba(123, 47, 247, 0.45)", btn_border="1px solid rgba(0, 194, 255, 0.55)"),
+    "server": dict(card=8, ctl=5, btn=5, nav=5, sel="palette(highlight)", sel_text="#ffffff",
+                   card_border="1px solid palette(midlight)", btn_border="1px solid palette(midlight)"),
 }
-QFrame#card {
-    background: palette(base);
-    border: 1px solid palette(midlight);
-    border-radius: 14px;
-}
-QFrame#card[active="true"] { border: 2px solid palette(highlight); }
-QLabel#badge {
-    color: palette(highlighted-text);
-    background: palette(highlight);
-    border-radius: 9px;
-    padding: 2px 10px;
-}
-QListWidget#nav { background: palette(window); border: none; padding: 10px 0; outline: none; }
-QListWidget#nav::item { height: 34px; padding-left: 10px; margin: 1px 10px; border-radius: 8px; border: none; }
-QListWidget#nav::item:hover { background: palette(alternate-base); }
-QListWidget#nav::item:selected { background: palette(highlight); color: palette(highlighted-text); }
-QStatusBar { border: none; }
-QScrollArea { background: transparent; }
+
+
+def build_style(mode=None):
+    t = MODE_SHAPE[mode or current_mode()]
+    return f"""
+QFrame#group {{ background: palette(base); border: {t['card_border']}; border-radius: {t['card']}px; }}
+QFrame#card {{ background: palette(base); border: {t['card_border']}; border-radius: {t['card'] + 2}px; }}
+QFrame#card[active="true"] {{ border: 2px solid palette(highlight); }}
+QLabel#badge {{ color: palette(highlighted-text); background: palette(highlight); border-radius: 9px; padding: 2px 10px; }}
+QListWidget#nav {{ background: palette(window); border: none; padding: 10px 0; outline: none; }}
+QListWidget#nav::item {{ min-height: 34px; padding-left: 10px; margin: 2px 10px; border-radius: {t['nav']}px; border: none; }}
+QListWidget#nav::item:hover {{ background: palette(alternate-base); }}
+QListWidget#nav::item:selected {{ background: {t['sel']}; color: {t['sel_text']}; }}
+QPushButton {{ padding: 6px 16px; border-radius: {t['btn']}px; border: {t['btn_border']}; background: palette(button); }}
+QPushButton:hover {{ background: palette(alternate-base); }}
+QPushButton:default {{ background: {t['sel']}; color: palette(highlighted-text); border: none; font-weight: 600; }}
+QPushButton:checked {{ background: {t['sel']}; color: {t['sel_text']}; border: none; }}
+QPushButton:flat {{ background: transparent; border: none; }}
+QPushButton:disabled {{ color: palette(placeholder-text); }}
+QLineEdit, QComboBox, QPlainTextEdit {{ border: 1px solid palette(midlight); border-radius: {t['ctl']}px;
+    padding: 5px 9px; background: palette(base); }}
+QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus {{ border: 1px solid palette(highlight); }}
+QProgressBar {{ border: none; border-radius: 4px; background: palette(alternate-base); height: 8px; text-align: center; }}
+QProgressBar::chunk {{ border-radius: 4px; background: {t['sel']}; }}
+QScrollBar:vertical {{ width: 8px; background: transparent; margin: 2px; }}
+QScrollBar::handle:vertical {{ background: palette(midlight); border-radius: 3px; min-height: 30px; }}
+QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+QStatusBar {{ border: none; }}
+QScrollArea {{ background: transparent; }}
 """
+
+
+STYLE = build_style()
 
 
 def fit(win, width, height):

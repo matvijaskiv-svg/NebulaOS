@@ -12,7 +12,7 @@ bar.addWidget("org.kde.plasma.systemtray");
 
 var dock = dockPanel("left", 2.7, true, false);
 look(dock, "opaque");                      // attached full-height dock
-addTasks(dock, launchers(["applications:org.kde.plasma-systemmonitor.desktop", "applications:nebula-ai.desktop"]), false);
+addTasks(dock, launchers(["applications:nebula-serverpanel.desktop", "applications:org.kde.plasma-systemmonitor.desktop", "applications:nebula-ai.desktop"]), false);
 dock.addWidget("org.kde.plasma.panelspacer");
 dock.addWidget("org.kde.plasma.trash");
 var grid = dock.addWidget("org.kde.plasma.kickoff");

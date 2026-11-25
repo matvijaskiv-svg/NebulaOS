@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""Server Panel (Server mode): services with on/off switches, ready-made servers
+in one click, firewall, load of the machine and a link to Cockpit."""
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, Meter, Page, app, fit, in_terminal, run, tile  # noqa: E402
+from PySide6.QtCore import QSize, QTimer  # noqa: E402
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QStackedWidget, QVBoxLayout, QWidget  # noqa: E402
+
+SERVICES = [  # (key for `nebula server enable`, unit, title, description)
+    ("ssh", "sshd", "SSH", "Remote terminal access (port 22)"),
+    ("docker", "docker", "Docker", "Containers"),
+    ("cockpit", "cockpit.socket", "Cockpit", "Web admin panel on port 9090"),
+    ("web", "nginx", "Web server", "nginx on port 80"),
+    ("db", "postgresql", "Database", "PostgreSQL"),
+]
+TEMPLATES = {"files": ("File server", "Shared folders for your network"),
+             "media": ("Media server", "Films and music for your devices"),
+             "minecraft": ("Minecraft server", "Play with friends")}
+
+
+def active(unit):
+    return subprocess.run(["systemctl", "is-active", "--quiet", unit]).returncode == 0
+
+
+def meminfo():
+    data = {}
+    for line in Path("/proc/meminfo").read_text().splitlines():
+        k, v = line.split(":", 1)
+        data[k] = int(v.split()[0])
+    return 1 - data.get("MemAvailable", 0) / max(data.get("MemTotal", 1), 1)
+
+
+class Panel(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("Server Panel"))
+        self.nav = QListWidget()
+        self.nav.setObjectName("nav")
+        self.nav.setFixedWidth(220)
+        self.nav.setIconSize(QSize(24, 24))
+        self.stack = QStackedWidget()
+        for title, icon, color, page in (("Overview", "computer", "#e95420", self.page_overview),
+                                         ("Services", "preferences-system", "#64748b", self.page_services),
+                                         ("Ready-made servers", "network-server", "#0ea5e9", self.page_templates),
+                                         ("Firewall", "security-high", "#dc2626", self.page_firewall)):
+            item = QListWidgetItem(tile(icon, color), _(title))
+            item.setSizeHint(QSize(0, 38))
+            self.nav.addItem(item)
+            self.stack.addWidget(page())
+        self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
+        body = QWidget()
+        lay = QHBoxLayout(body)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(self.nav)
+        lay.addWidget(self.stack, 1)
+        self.setCentralWidget(body)
+        self.nav.setCurrentRow(0)
+        fit(self, 1000, 680)
+
+    def page_overview(self):
+        p = Page("Overview")
+        g = p.group("Load")
+        row = QWidget()
+        v = QVBoxLayout(row)
+        v.setContentsMargins(0, 6, 0, 6)
+        self.cpu_label, self.mem_label = QLabel(), QLabel()
+        self.cpu_meter, self.mem_meter = Meter(0), Meter(0)
+        for lbl, meter in ((self.cpu_label, self.cpu_meter), (self.mem_label, self.mem_meter)):
+            v.addWidget(lbl)
+            v.addWidget(meter)
+        g.widget(row)
+        self._cpu = self.cpu_times()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_load)
+        self.timer.start(2000)
+        self.update_load()
+        s = p.group("Services")
+        for key, unit, title, _desc in SERVICES:
+            s.widget(QLabel(f"{'●' if active(unit) else '○'}  {_(title)}"))
+        c = p.group()
+        c.action("Cockpit", "Full web admin panel: logs, users, storage", "Open",
+                 lambda: subprocess.Popen(["xdg-open", "https://localhost:9090"]))
+        return p
+
+    @staticmethod
+    def cpu_times():
+        parts = [int(x) for x in Path("/proc/stat").read_text().split("\n", 1)[0].split()[1:]]
+        return sum(parts), parts[3] + parts[4]
+
+    def update_load(self):
+        total, idle = self.cpu_times()
+        dt, di = total - self._cpu[0], idle - self._cpu[1]
+        self._cpu = (total, idle)
+        cpu = 1 - di / dt if dt else 0
+        mem = meminfo()
+        self.cpu_label.setText(_("Processor: {}%").format(round(cpu * 100)))
+        self.mem_label.setText(_("Memory: {}%").format(round(mem * 100)))
+        self.cpu_meter.set(cpu)
+        self.mem_meter.set(mem)
+
+    def page_services(self):
+        p = Page("Services", "Turning a service on also opens its port in the firewall.")
+        g = p.group()
+        for key, unit, title, desc in SERVICES:
+            def toggle(on, k=key, u=unit):
+                if on:
+                    in_terminal("nebula", "server", "enable", k)
+                else:
+                    in_terminal("sudo", "systemctl", "disable", "--now", u)
+            g.switch(title, desc, active(unit), toggle)
+        return p
+
+    def page_templates(self):
+        p = Page("Ready-made servers", "Each one runs in Docker and starts with the computer.")
+        g = p.group()
+        root = Path("/usr/share/nebulaos/templates")
+        for name in sorted(x.name for x in root.iterdir()) if root.exists() else []:
+            title, desc = TEMPLATES.get(name, (name, ""))
+            deployed = Path(f"/srv/nebula/{name}/compose.yaml").exists()
+            if deployed:
+                g.action(title, desc, "Remove", lambda n=name: in_terminal("nebula", "template", "remove", n))
+            else:
+                g.action(title, desc, "Deploy", lambda n=name: in_terminal("nebula", "template", "deploy", n))
+        return p
+
+    def page_firewall(self):
+        p = Page("Firewall")
+        g = p.group()
+        on = active("ufw")
+        g.switch("Firewall", "Block incoming connections except open services", on,
+                 lambda en: in_terminal("nebula", "server", "firewall") if en
+                 else in_terminal("sudo", "ufw", "disable"))
+        g.action("Rules", "", "Show", lambda: in_terminal("sudo", "ufw", "status", "numbered"))
+        return p
+
+
+def main():
+    a = app("nebula-serverpanel", "network-server")
+    w = Panel()
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

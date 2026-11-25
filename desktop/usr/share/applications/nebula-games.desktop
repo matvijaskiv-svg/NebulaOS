@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Game Center
+Name[ru]=Игровой центр
+Name[uk]=Ігровий центр
+Name[it]=Centro giochi
+Comment=Your games, performance and launchers
+Exec=nebula-games
+Icon=input-gaming
+Categories=Game;

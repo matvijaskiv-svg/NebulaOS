@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Toolkit (Hacking mode): privacy switches, practice labs, network tools and
+information about your network — for your own systems and labs only."""
+import re
+import shutil
+import socket
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, Page, app, background, fit, in_terminal, run, tile  # noqa: E402
+from PySide6.QtCore import QSize, Qt  # noqa: E402
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QStackedWidget, QWidget  # noqa: E402
+
+TOOLS = [  # (name, description, package, how to run)
+    ("Wireshark", "Look at network traffic", "wireshark-qt", ["wireshark"]),
+    ("Nmap", "Scan your own network", "nmap", ["term", "nmap", "--help"]),
+    ("ZAP", "Test your own web apps", "zaproxy", ["zaproxy"]),
+    ("Ghidra", "Reverse engineering", "ghidra", ["ghidra"]),
+    ("Metasploit", "Exploit framework for labs", "metasploit", ["term", "msfconsole"]),
+    ("John the Ripper", "Check password strength", "john", ["term", "john"]),
+    ("hashcat", "Password recovery on GPU", "hashcat", ["term", "hashcat", "--help"]),
+]
+
+
+def local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("10.255.255.255", 1))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except OSError:
+        return "—"
+
+
+class Toolkit(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("Toolkit"))
+        self.nav = QListWidget()
+        self.nav.setObjectName("nav")
+        self.nav.setFixedWidth(220)
+        self.nav.setIconSize(QSize(24, 24))
+        self.stack = QStackedWidget()
+        for title, icon, color, page in (("Privacy", "security-high", "#a855f7", self.page_privacy),
+                                         ("Labs", "applications-science", "#22c55e", self.page_labs),
+                                         ("Tools", "utilities-terminal", "#0ea5e9", self.page_tools),
+                                         ("Network", "network-wired", "#f59e0b", self.page_network)):
+            item = QListWidgetItem(tile(icon, color), _(title))
+            item.setSizeHint(QSize(0, 38))
+            self.nav.addItem(item)
+            self.stack.addWidget(page())
+        self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
+        body = QWidget()
+        lay = QHBoxLayout(body)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(self.nav)
+        lay.addWidget(self.stack, 1)
+        self.setCentralWidget(body)
+        self.nav.setCurrentRow(0)
+        fit(self, 1000, 680)
+
+    def page_privacy(self):
+        p = Page("Privacy")
+        g = p.group()
+        tor_on = "on" in run("tor", "status")[1].lower() and "off" not in run("tor", "status")[1].lower()
+        g.switch("Tor", "Anonymous connection on 127.0.0.1:9050; run an app through it with torsocks", tor_on,
+                 lambda on: in_terminal("nebula", "tor", "on" if on else "off"))
+        g.switch("Random MAC address", "A new hardware address for Wi-Fi and Ethernet", False,
+                 lambda on: in_terminal("nebula", "privacy", "mac", "on" if on else "off"))
+        g.action("Tor Browser", "", "Open",
+                 lambda: subprocess.Popen(["torbrowser-launcher"]) if shutil.which("torbrowser-launcher")
+                 else subprocess.Popen(["nebula-store"]))
+        return p
+
+    def page_labs(self):
+        p = Page("Labs", "Practice targets that run in Docker and are reachable only from this computer.")
+        g = p.group()
+        labs = re.findall(r"^\s+(\S+)\s+(http://127\.0\.0\.1:\d+)", run("lab", "list")[1], re.M)
+        for name, url in labs:
+            row_start = lambda n=name: in_terminal("nebula", "lab", "start", n)
+            g.action(name, url, "Start", row_start)
+        if labs:
+            g.action("Stop a lab", "", "Stop…", lambda: in_terminal("bash", "-c", "nebula lab list; read -rp 'Lab: ' l; nebula lab stop \"$l\""))
+        else:
+            g.action("Labs need Docker", "", "Install", lambda: in_terminal("nebula", "server", "enable", "docker"))
+        return p
+
+    def page_tools(self):
+        p = Page("Tools", "Use them only on your own devices and labs.")
+        g = p.group()
+        for name, desc, pkg, cmd in TOOLS:
+            if shutil.which(cmd[1] if cmd[0] == "term" else cmd[0]):
+                action = (lambda c=cmd: in_terminal(*c[1:])) if cmd[0] == "term" else (lambda c=cmd: subprocess.Popen(c))
+                g.action(name, desc, "Open", action)
+            else:
+                g.action(name, desc, "Install", lambda pk=pkg: in_terminal("sudo", "pacman", "-S", "--needed", pk))
+        return p
+
+    def page_network(self):
+        p = Page("Network")
+        g = p.group()
+        self.ip_label = QLabel(local_ip())
+        g.action("Local address", local_ip(), "Copy", lambda: QApplication_clip(local_ip()))
+        pub = QLabel("…")
+        pub.setStyleSheet("color: palette(placeholder-text);")
+        g.widget(QLabel(_("Public address:")))
+        g.widget(pub)
+
+        def got(ip):
+            pub.setText(ip if isinstance(ip, str) else "—")
+        background(lambda: subprocess.run(["curl", "-s", "--max-time", "6", "https://ifconfig.me"],
+                                          capture_output=True, text=True).stdout.strip(), got)
+        g.action("Interfaces and routes", "ip address · ip route", "Show",
+                 lambda: in_terminal("bash", "-c", "ip -c address; echo; ip -c route"))
+        g.action("Open ports on this computer", "ss -tulpn", "Show", lambda: in_terminal("sudo", "ss", "-tulpn"))
+        return p
+
+
+def QApplication_clip(text):
+    from PySide6.QtGui import QGuiApplication
+    QGuiApplication.clipboard().setText(text)
+
+
+def main():
+    a = app("nebula-toolkit", "utilities-terminal")
+    w = Toolkit()
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
