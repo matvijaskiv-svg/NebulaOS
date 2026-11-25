@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.7.8
+- New look without purple: graphite and blue for Hacking, black and red for Gaming, grey and orange for Server; calm new wallpapers
+
 ## 0.7.7
 - New apps: Game Center, Toolkit and Server Panel; each mode styles the NebulaOS apps its own way
 

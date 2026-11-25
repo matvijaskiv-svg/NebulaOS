@@ -57,12 +57,11 @@ def current_mode():
     return "gaming"
 
 
-MODE_SHAPE = {
-    "hacking": dict(card=14, ctl=9, btn=9, nav=9, sel="palette(highlight)", sel_text="#1e1e2e",
+MODE_SHAPE = {   # one solid accent per mode, neutral borders — no gradients or glow
+    "hacking": dict(card=12, ctl=7, btn=7, nav=7, sel="palette(highlight)", sel_text="#ffffff",
                     card_border="1px solid palette(midlight)", btn_border="1px solid palette(midlight)"),
-    "gaming": dict(card=10, ctl=8, btn=8, nav=8, sel_text="#ffffff",
-                   sel="qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7b2ff7, stop:1 #00b8ff)",
-                   card_border="1px solid rgba(123, 47, 247, 0.45)", btn_border="1px solid rgba(0, 194, 255, 0.55)"),
+    "gaming": dict(card=8, ctl=6, btn=6, nav=6, sel="palette(highlight)", sel_text="#ffffff",
+                   card_border="1px solid palette(midlight)", btn_border="1px solid palette(midlight)"),
     "server": dict(card=8, ctl=5, btn=5, nav=5, sel="palette(highlight)", sel_text="#ffffff",
                    card_border="1px solid palette(midlight)", btn_border="1px solid palette(midlight)"),
 }

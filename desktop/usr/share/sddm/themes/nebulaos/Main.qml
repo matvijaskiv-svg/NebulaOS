@@ -11,7 +11,7 @@ Rectangle {
     height: 1080
     color: "#07060d"
 
-    property color accent: config.accent || "#a855f7"
+    property color accent: config.accent || "#0a84ff"
     property int userIndex: Math.max(0, userModel.lastIndex)
     property int sessionIndex: Math.max(0, sessionModel.lastIndex)
     property string userName: ""

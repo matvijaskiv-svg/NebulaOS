@@ -58,7 +58,7 @@ class Cover(QFrame):
         if cover:
             pic.setPixmap(QPixmap(str(cover)).scaled(154, 230, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
         else:
-            pic.setPixmap(tile("input-gaming", "#7b2ff7", 64).pixmap(64, 64))
+            pic.setPixmap(tile("input-gaming", "#e5484d", 64).pixmap(64, 64))
             pic.setStyleSheet("background: palette(alternate-base); border-radius: 8px;")
         title = QLabel(name)
         title.setWordWrap(True)
@@ -80,7 +80,7 @@ class Games(QMainWindow):
         self.nav.setFixedWidth(220)
         self.nav.setIconSize(QSize(24, 24))
         self.stack = QStackedWidget()
-        for title, icon, color, page in (("Library", "input-gaming", "#7b2ff7", self.page_library),
+        for title, icon, color, page in (("Library", "input-gaming", "#e5484d", self.page_library),
                                          ("Boost", "speedometer", "#ef4444", self.page_perf),
                                          ("Launchers", "applications-games", "#0ea5e9", self.page_launchers)):
             item = QListWidgetItem(tile(icon, color), _(title))

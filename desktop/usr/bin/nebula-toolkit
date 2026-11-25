@@ -43,7 +43,7 @@ class Toolkit(QMainWindow):
         self.nav.setFixedWidth(220)
         self.nav.setIconSize(QSize(24, 24))
         self.stack = QStackedWidget()
-        for title, icon, color, page in (("Privacy", "security-high", "#a855f7", self.page_privacy),
+        for title, icon, color, page in (("Privacy", "security-high", "#5b6b7f", self.page_privacy),
                                          ("Labs", "applications-science", "#22c55e", self.page_labs),
                                          ("Tools", "utilities-terminal", "#0ea5e9", self.page_tools),
                                          ("Network", "network-wired", "#f59e0b", self.page_network)):

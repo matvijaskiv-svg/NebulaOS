@@ -42,7 +42,7 @@ STATS = DATA / "community.json"          # what the admin panel reads
 CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "nebulaos"
 PREFIX = "NebulaOS|"
 SUPPORT_NAME = "NebulaOS Support"
-ONLINE, OFFLINE, ACCENT = "#22c55e", "#6b7280", "#8b5cf6"
+ONLINE, OFFLINE, ACCENT = "#30a46c", "#6b7280", "#3e8ef7"
 NAME_COLORS = ["#f472b6", "#60a5fa", "#34d399", "#fbbf24", "#a78bfa", "#fb7185", "#2dd4bf", "#f97316"]
 BUBBLE = {
     True: "background: palette(highlight); color: palette(highlighted-text); border-radius: 14px; padding: 8px 12px;",

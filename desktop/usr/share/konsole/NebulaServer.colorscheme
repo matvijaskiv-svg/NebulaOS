@@ -4,16 +4,16 @@ Opacity=1
 Blur=false
 
 [Background]
-Color=33,9,27
+Color=36,36,36
 
 [BackgroundIntense]
-Color=33,9,27
+Color=36,36,36
 
 [Foreground]
-Color=247,242,245
+Color=242,242,242
 
 [ForegroundIntense]
-Color=247,242,245
+Color=242,242,242
 
 [Color0]
 Color=46,52,54
