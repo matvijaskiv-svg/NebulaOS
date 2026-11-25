@@ -881,6 +881,32 @@ T = {
     "Cancelled, or no internet. Open Details to see why.": ("Отменено или нет интернета. Причина — в «Подробнее».",
         "Скасовано або немає інтернету. Причина — у «Докладніше».", "Annullato o niente internet. Vedi Dettagli."),
     "Open": ("Открыть", "Відкрити", "Apri"),
+    # ---- 0.7.5: plain texts ----
+    "Steam, MangoHud, game mode": ("Steam, MangoHud, игровой режим", "Steam, MangoHud, ігровий режим", "Steam, MangoHud, modalità gioco"),
+    "Network and security tools, Tor": ("Сетевые инструменты и безопасность, Tor", "Мережеві інструменти й безпека, Tor",
+                                        "Strumenti di rete e sicurezza, Tor"),
+    "Docker, Cockpit, firewall": ("Docker, Cockpit, файрвол", "Docker, Cockpit, файрвол", "Docker, Cockpit, firewall"),
+    "Choose a language and a mode. You can change both later in Settings.":
+        ("Выберите язык и режим. Потом их можно поменять в Настройках.",
+         "Оберіть мову й режим. Потім їх можна змінити в Налаштуваннях.",
+         "Scegli lingua e modalità. Potrai cambiarle in Impostazioni."),
+    "All of this is also in Settings (Super+H).": ("Всё это есть и в Настройках (Super+H).",
+        "Усе це є й у Налаштуваннях (Super+H).", "Tutto questo è anche in Impostazioni (Super+H)."),
+    "NVIDIA graphics found — install the driver": ("Найдена видеокарта NVIDIA — установите драйвер",
+        "Знайдено відеокарту NVIDIA — встановіть драйвер", "Trovata una scheda NVIDIA — installa il driver"),
+    "Switches to Gaming when a game starts": ("Включает «Гейминг», когда запускается игра",
+        "Вмикає «Ігри», коли запускається гра", "Passa a Gaming quando parte un gioco"),
+    "Changes apply right away.": ("Изменения применяются сразу.", "Зміни застосовуються одразу.", "Le modifiche sono immediate."),
+    "Stop charging at 80%": ("Заряжать до 80%", "Заряджати до 80%", "Carica fino all'80%"),
+    "Internet, drivers, sound, disk, services": ("Интернет, драйверы, звук, диск, службы",
+        "Інтернет, драйвери, звук, диск, служби", "Internet, driver, audio, disco, servizi"),
+    "NebulaOS and all apps. A snapshot is taken first.": ("NebulaOS и все программы. Сначала делается снимок системы.",
+        "NebulaOS і всі програми. Спершу робиться знімок системи.", "NebulaOS e tutte le app. Prima si crea un'istantanea."),
+    "Runs on this computer, offline. Super+A.": ("Работает на этом компьютере, без интернета. Super+A.",
+        "Працює на цьому комп'ютері, без інтернету. Super+A.", "Funziona su questo computer, offline. Super+A."),
+    "Settings": ("Настройки", "Налаштування", "Impostazioni"),
+    "Assistant": ("Ассистент", "Асистент", "Assistente"),
+    "Messages": ("Сообщения", "Повідомлення", "Messaggi"),
 }
 
 OUT = Path(__file__).resolve().parent.parent / "desktop/usr/share/nebulaos/i18n"
