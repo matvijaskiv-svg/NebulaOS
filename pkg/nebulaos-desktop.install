@@ -1,7 +1,22 @@
+_nebula_locales() {
+  # All interface languages must exist, or Plasma's "Region and language" page fails.
+  local l changed=0
+  for l in en_US ru_RU uk_UA it_IT; do
+    if ! grep -q "^$l.UTF-8 UTF-8" /etc/locale.gen; then
+      sed -i "s/^#\($l.UTF-8 UTF-8\)/\1/" /etc/locale.gen
+      grep -q "^$l.UTF-8 UTF-8" /etc/locale.gen || echo "$l.UTF-8 UTF-8" >> /etc/locale.gen
+      changed=1
+    fi
+  done
+  (( changed )) && locale-gen >/dev/null 2>&1
+  return 0
+}
 post_install() {
+  _nebula_locales
   echo '==> NebulaOS installed. Switch mode: Super+M, control center: Super+H.'
 }
 post_upgrade() {
-  echo "==> NebulaOS updated: $2 → $1. The new look applies after Super+Ctrl+R or re-login."
+  _nebula_locales
+  echo "==> NebulaOS updated: $2 → $1. The new look applies after re-login."
   echo '    What is new: /usr/share/nebulaos/CHANGELOG.md'
 }

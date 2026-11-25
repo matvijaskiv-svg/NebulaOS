@@ -856,6 +856,12 @@ T = {
     "Modes": ("Режимы", "", ""),
     "Languages": ("Языки", "", ""),
     "Users": ("Пользователи", "Користувачі", "Utenti"),
+    # ---- 0.7.3 ----
+    "Keyboard layouts (switch with Alt+Shift):": ("Раскладки клавиатуры (переключение Alt+Shift):",
+        "Розкладки клавіатури (перемикання Alt+Shift):", "Layout di tastiera (cambia con Alt+Shift):"),
+    "More layouts and options": ("Другие раскладки и параметры", "Інші розкладки й параметри", "Altri layout e opzioni"),
+    "Layouts: %s (switch: Alt+Shift)\\n": ("Раскладки: %s (переключение: Alt+Shift)\\n",
+        "Розкладки: %s (перемикання: Alt+Shift)\\n", "Layout: %s (cambia: Alt+Shift)\\n"),
 }
 
 OUT = Path(__file__).resolve().parent.parent / "desktop/usr/share/nebulaos/i18n"

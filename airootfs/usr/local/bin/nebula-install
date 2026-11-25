@@ -188,7 +188,7 @@ ln -sf "/usr/share/zoneinfo/$TZ_" /etc/localtime
 # Windows keeps local time in the hardware clock; match it for dual boot so the clock does not drift.
 if [[ $DUAL_ == 1 ]]; then hwclock --systohc --localtime; else hwclock --systohc; fi
 case $LANG_ in ru) LOC_=ru_RU ;; uk) LOC_=uk_UA ;; it) LOC_=it_IT ;; *) LOC_=en_US ;; esac
-sed -i "s/^#\(en_US.UTF-8 UTF-8\)/\1/; s/^#\($LOC_.UTF-8 UTF-8\)/\1/" /etc/locale.gen
+for l in en_US ru_RU uk_UA it_IT; do sed -i "s/^#\($l.UTF-8 UTF-8\)/\1/" /etc/locale.gen; done
 locale-gen >/dev/null
 printf 'LANG=%s.UTF-8\n' "$LOC_" > /etc/locale.conf
 printf 'KEYMAP=us\nFONT=cyr-sun16\n' > /etc/vconsole.conf
