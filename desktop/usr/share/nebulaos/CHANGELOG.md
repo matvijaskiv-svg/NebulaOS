@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.8.2
+- Fixes: window buttons visible again, icons in Server mode, panels locked, no GRUB theme error at boot, no keyboard error after updates, clearer update text
+
 ## 0.8.1
 - Game Center like Big Picture, Server Panel with live graphs, logs and containers, Toolkit with network scan, port check and Wi-Fi list
 

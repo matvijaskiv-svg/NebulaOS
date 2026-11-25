@@ -154,7 +154,7 @@ apply() {
   kcfg --file kxkbrc --group Layout --key LayoutList "$layout"
   kcfg --file kxkbrc --group Layout --key Options grp:alt_shift_toggle
   kcfg --file kxkbrc --group Layout --key ResetOldOptions true
-  qdbus_ org.kde.keyboard /Layouts org.kde.KeyboardLayouts.reloadConfig 2>/dev/null || true
+  dbus-send --session --type=signal /Layouts org.kde.keyboard.reloadConfig >/dev/null 2>&1 || true
   apply_wallpaper "$m"
   apply_dock "$m"
   qdbus_ org.kde.KWin /KWin reconfigure
@@ -267,7 +267,7 @@ cmd_update() {
     return 0
   fi
   local before; before=$(version)
-  printf "$(t '\033[1mNebulaOS %s — update\033[0m\n')" "$before"
+  printf "$(t '\033[1mInstalled: NebulaOS %s.\033[0m Looking for updates (your password is needed)…\n')" "$before"
   ensure_repo
   if pacman -Q snap-pac >/dev/null 2>&1; then
     printf "$(t 'snap-pac takes snapshots before and after the update (rollback: GRUB menu → snapshots).\n')"
@@ -734,7 +734,7 @@ cmd_keyboard() {
   kcfg --file kxkbrc --group Layout --key LayoutList "$list"
   kcfg --file kxkbrc --group Layout --key Options grp:alt_shift_toggle
   kcfg --file kxkbrc --group Layout --key ResetOldOptions true
-  qdbus_ org.kde.keyboard /Layouts org.kde.KeyboardLayouts.reloadConfig 2>/dev/null || true
+  dbus-send --session --type=signal /Layouts org.kde.keyboard.reloadConfig >/dev/null 2>&1 || true
   printf "$(t 'Layouts: %s (switch: Alt+Shift)\n')" "$list"
 }
 

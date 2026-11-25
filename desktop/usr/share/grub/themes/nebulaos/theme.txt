@@ -3,7 +3,6 @@ title-text: ""
 desktop-image: "background.png"
 desktop-color: "#07060d"
 terminal-font: "Unifont Regular 16"
-terminal-box: ""
 
 + boot_menu {
     left = 32%
@@ -11,7 +10,7 @@ terminal-box: ""
     width = 36%
     height = 30%
     item_font = "Unifont Regular 16"
-    item_color = "#a99bbd"
+    item_color = "#a8a8b0"
     selected_item_font = "Unifont Regular 16"
     selected_item_color = "#ffffff"
     selected_item_pixmap_style = "select_*.png"
@@ -31,9 +30,9 @@ terminal-box: ""
     width = 20%
     height = 4
     show_text = false
-    fg_color = "#a855f7"
-    bg_color = "#241b30"
-    border_color = "#241b30"
+    fg_color = "#e8e8ea"
+    bg_color = "#2a2a2e"
+    border_color = "#2a2a2e"
 }
 
 + label {
@@ -41,7 +40,7 @@ terminal-box: ""
     left = 0
     width = 100%
     align = "center"
-    color = "#6f6384"
+    color = "#7a7a82"
     font = "Unifont Regular 16"
     text = "Enter: boot    E: edit    C: console"
 }

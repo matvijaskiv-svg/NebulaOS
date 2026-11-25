@@ -354,6 +354,7 @@ Turbo mode off	Турбо-режим вимкнено
 Turbo mode: effects off	Турбо-режим: ефекти вимкнено
 \nPress Enter to close…	\nНатисніть Enter, щоб закрити…
 Enable the NebulaOS update repository? [Y/n] 	Підключити репозиторій оновлень NebulaOS? [Y/n] 
+\033[1mInstalled: NebulaOS %s.\033[0m Looking for updates (your password is needed)…\n	\033[1mВстановлено NebulaOS %s.\033[0m Шукаю оновлення (потрібен ваш пароль)…\n
 \033[1mNebulaOS %s — update\033[0m\n	\033[1mNebulaOS %s — оновлення\033[0m\n
 snap-pac takes snapshots before and after the update (rollback: GRUB menu → snapshots).\n	snap-pac створить знімки до і після оновлення (відкат: меню GRUB → snapshots).\n
 Graphics:\n%s\n\n	Відеокарти:\n%s\n\n

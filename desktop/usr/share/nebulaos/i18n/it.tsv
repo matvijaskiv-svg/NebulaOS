@@ -332,6 +332,7 @@ Turbo mode off	Modalità turbo disattivata
 Turbo mode: effects off	Modalità turbo: effetti disattivati
 \nPress Enter to close…	\nPremi Invio per chiudere…
 Enable the NebulaOS update repository? [Y/n] 	Attivare il repository degli aggiornamenti di NebulaOS? [Y/n] 
+\033[1mInstalled: NebulaOS %s.\033[0m Looking for updates (your password is needed)…\n	\033[1mInstallato: NebulaOS %s.\033[0m Cerco aggiornamenti (serve la password)…\n
 \033[1mNebulaOS %s — update\033[0m\n	\033[1mNebulaOS %s — aggiornamento\033[0m\n
 snap-pac takes snapshots before and after the update (rollback: GRUB menu → snapshots).\n	snap-pac crea snapshot prima e dopo l'aggiornamento (ripristino: menu GRUB → snapshots).\n
 Graphics:\n%s\n\n	Schede grafiche:\n%s\n\n

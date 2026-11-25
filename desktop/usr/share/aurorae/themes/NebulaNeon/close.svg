@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="80" height="16" viewBox="0 0 80 16">
-<g id="active" transform="translate(0,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><path d="M5,5 L11,11 M11,5 L5,11" stroke="#ff2e97" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
-<g id="inactive" transform="translate(16,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><path d="M5,5 L11,11 M11,5 L5,11" stroke="#6f6a8a" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
-<g id="hover" transform="translate(32,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="7.5" fill="#ff2e97" fill-opacity="0.18"/><path d="M5,5 L11,11 M11,5 L5,11" stroke="#ff2e97" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
-<g id="pressed" transform="translate(48,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="7.5" fill="#ff2e97" fill-opacity="0.32"/><path d="M5,5 L11,11 M11,5 L5,11" stroke="#ff2e97" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
-<g id="deactivated" transform="translate(64,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><path d="M5,5 L11,11 M11,5 L5,11" stroke="#3c3850" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+<g id="active-center" transform="translate(0,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><path d="M5,5 L11,11 M11,5 L5,11" stroke="#ff2e97" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+<g id="inactive-center" transform="translate(16,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><path d="M5,5 L11,11 M11,5 L5,11" stroke="#6f6a8a" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+<g id="hover-center" transform="translate(32,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="7.5" fill="#ff2e97" fill-opacity="0.18"/><path d="M5,5 L11,11 M11,5 L5,11" stroke="#ff2e97" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+<g id="pressed-center" transform="translate(48,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="7.5" fill="#ff2e97" fill-opacity="0.32"/><path d="M5,5 L11,11 M11,5 L5,11" stroke="#ff2e97" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+<g id="deactivated-center" transform="translate(64,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><path d="M5,5 L11,11 M11,5 L5,11" stroke="#3c3850" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
 </svg>

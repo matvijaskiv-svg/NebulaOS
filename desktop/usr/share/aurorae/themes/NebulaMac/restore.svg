@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="80" height="16" viewBox="0 0 80 16">
-<g id="active" transform="translate(0,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="6" fill="#28c840"/></g>
-<g id="inactive" transform="translate(16,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="6" fill="#4b4b57"/></g>
-<g id="hover" transform="translate(32,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="6" fill="#28c840"/><path d="M5,6 L10,11 M6,11 L10,11 L10,7" stroke="#4d0000" stroke-opacity="0.7" stroke-width="1.4" stroke-linecap="round" fill="none"/></g>
-<g id="pressed" transform="translate(48,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="6" fill="#28c840"/><circle cx="8" cy="8" r="6" fill="#000" fill-opacity="0.2"/><path d="M5,6 L10,11 M6,11 L10,11 L10,7" stroke="#4d0000" stroke-opacity="0.7" stroke-width="1.4" stroke-linecap="round" fill="none"/></g>
-<g id="deactivated" transform="translate(64,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="6" fill="#3a3a44"/></g>
+<g id="active-center" transform="translate(0,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="6" fill="#28c840"/></g>
+<g id="inactive-center" transform="translate(16,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="6" fill="#4b4b57"/></g>
+<g id="hover-center" transform="translate(32,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="6" fill="#28c840"/><path d="M5,6 L10,11 M6,11 L10,11 L10,7" stroke="#4d0000" stroke-opacity="0.7" stroke-width="1.4" stroke-linecap="round" fill="none"/></g>
+<g id="pressed-center" transform="translate(48,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="6" fill="#28c840"/><circle cx="8" cy="8" r="6" fill="#000" fill-opacity="0.2"/><path d="M5,6 L10,11 M6,11 L10,11 L10,7" stroke="#4d0000" stroke-opacity="0.7" stroke-width="1.4" stroke-linecap="round" fill="none"/></g>
+<g id="deactivated-center" transform="translate(64,0)"><rect width="16" height="16" fill="#000" fill-opacity="0"/><circle cx="8" cy="8" r="6" fill="#3a3a44"/></g>
 </svg>
