@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
-"""Server Panel (Server mode): services with on/off switches, ready-made servers
-in one click, firewall, load of the machine and a link to Cockpit."""
+"""Server Panel (Server mode): a live dashboard.
+
+Graphs of CPU, memory and network, disk usage, uptime; services with status, on/off
+and their logs; Docker containers; ready-made servers; firewall rules.
+"""
 import shutil
 import subprocess
 import sys
+import time
+from collections import deque
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/nebulaos")
-from nebula_qt import _, Meter, Page, app, fit, in_terminal, run, tile  # noqa: E402
-from PySide6.QtCore import QSize, QTimer  # noqa: E402
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QStackedWidget, QVBoxLayout, QWidget  # noqa: E402
+from nebula_qt import _, Meter, Page, app, background, fit, in_terminal, tile  # noqa: E402
+from PySide6.QtCore import QPointF, QSize, Qt, QTimer  # noqa: E402
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow,
+    QPlainTextEdit, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
+)
 
 SERVICES = [  # (key for `nebula server enable`, unit, title, description)
     ("ssh", "sshd", "SSH", "Remote terminal access (port 22)"),
@@ -23,16 +32,86 @@ TEMPLATES = {"files": ("File server", "Shared folders for your network"),
              "minecraft": ("Minecraft server", "Play with friends")}
 
 
-def active(unit):
-    return subprocess.run(["systemctl", "is-active", "--quiet", unit]).returncode == 0
+def unit_state(unit):
+    r = subprocess.run(["systemctl", "is-active", unit], capture_output=True, text=True)
+    return r.stdout.strip() or "unknown"
 
 
-def meminfo():
-    data = {}
-    for line in Path("/proc/meminfo").read_text().splitlines():
-        k, v = line.split(":", 1)
-        data[k] = int(v.split()[0])
-    return 1 - data.get("MemAvailable", 0) / max(data.get("MemTotal", 1), 1)
+def human(n):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024:
+            return f"{n:.0f} {unit}" if unit in ("B", "KB") else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} PB"
+
+
+class Graph(QWidget):
+    """A live area graph with its title and current value."""
+
+    def __init__(self, title, color, unit="%", maximum=100.0):
+        super().__init__()
+        self.title, self.color, self.unit, self.maximum = title, QColor(color), unit, maximum
+        self.values = deque([0.0] * 60, maxlen=60)
+        self.setMinimumHeight(140)
+
+    def push(self, value):
+        self.values.append(value)
+        self.update()
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        r = self.rect().adjusted(1, 1, -1, -1)
+        p.setPen(QPen(self.palette().midlight().color(), 1))
+        p.setBrush(self.palette().base())
+        p.drawRoundedRect(r, 10, 10)
+        top = r.top() + 40
+        h = r.height() - 52
+        top_val = self.maximum if self.unit == "%" else max(max(self.values) * 1.2, 1)
+        pts = [QPointF(r.left() + 12 + i * (r.width() - 24) / (len(self.values) - 1),
+                       top + h - min(v / top_val, 1) * h) for i, v in enumerate(self.values)]
+        area = QPainterPath(QPointF(pts[0].x(), top + h))
+        for pt in pts:
+            area.lineTo(pt)
+        area.lineTo(QPointF(pts[-1].x(), top + h))
+        fill = QColor(self.color)
+        fill.setAlpha(45)
+        p.fillPath(area, fill)
+        line = QPainterPath(pts[0])
+        for pt in pts[1:]:
+            line.lineTo(pt)
+        p.setPen(QPen(self.color, 2))
+        p.setBrush(Qt.NoBrush)
+        p.drawPath(line)
+        p.setPen(self.palette().text().color())
+        f = QFont(self.font())
+        f.setBold(True)
+        p.setFont(f)
+        p.drawText(r.adjusted(14, 10, -14, 0), Qt.AlignLeft | Qt.AlignTop, _(self.title))
+        cur = self.values[-1]
+        value = f"{cur:.0f}%" if self.unit == "%" else human(cur) + "/s"
+        p.setPen(self.color)
+        p.drawText(r.adjusted(14, 10, -14, 0), Qt.AlignRight | Qt.AlignTop, value)
+        p.end()
+
+
+class Logs(QDialog):
+    def __init__(self, parent, unit):
+        super().__init__(parent)
+        self.setWindowTitle(f"{unit} — " + _("Logs"))
+        self.resize(900, 520)
+        v = QVBoxLayout(self)
+        text = QPlainTextEdit()
+        text.setReadOnly(True)
+        text.setFont(QFont("monospace", 9))
+        out = subprocess.run(["journalctl", "-u", unit, "-n", "300", "--no-pager", "-o", "short-iso"],
+                             capture_output=True, text=True).stdout
+        text.setPlainText(out.strip() or _("No log entries yet."))
+        text.moveCursor(text.textCursor().End)
+        v.addWidget(text)
+        close = QPushButton(_("Close"))
+        close.clicked.connect(self.accept)
+        v.addWidget(close, 0, Qt.AlignRight)
 
 
 class Panel(QMainWindow):
@@ -44,15 +123,17 @@ class Panel(QMainWindow):
         self.nav.setFixedWidth(220)
         self.nav.setIconSize(QSize(24, 24))
         self.stack = QStackedWidget()
-        for title, icon, color, page in (("Overview", "computer", "#e95420", self.page_overview),
-                                         ("Services", "preferences-system", "#64748b", self.page_services),
-                                         ("Ready-made servers", "network-server", "#0ea5e9", self.page_templates),
-                                         ("Firewall", "security-high", "#dc2626", self.page_firewall)):
+        self.builders = [("Overview", "computer", "#e95420", self.page_overview),
+                         ("Services", "preferences-system", "#64748b", self.page_services),
+                         ("Containers", "package-x-generic", "#0ea5e9", self.page_containers),
+                         ("Ready-made servers", "network-server", "#14b8a6", self.page_templates),
+                         ("Firewall", "security-high", "#dc2626", self.page_firewall)]
+        for title, icon, color, _b in self.builders:
             item = QListWidgetItem(tile(icon, color), _(title))
             item.setSizeHint(QSize(0, 38))
             self.nav.addItem(item)
-            self.stack.addWidget(page())
-        self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
+            self.stack.addWidget(QWidget())
+        self.nav.currentRowChanged.connect(self.show_page)
         body = QWidget()
         lay = QHBoxLayout(body)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -60,60 +141,145 @@ class Panel(QMainWindow):
         lay.addWidget(self.nav)
         lay.addWidget(self.stack, 1)
         self.setCentralWidget(body)
-        self.nav.setCurrentRow(0)
-        fit(self, 1000, 680)
-
-    def page_overview(self):
-        p = Page("Overview")
-        g = p.group("Load")
-        row = QWidget()
-        v = QVBoxLayout(row)
-        v.setContentsMargins(0, 6, 0, 6)
-        self.cpu_label, self.mem_label = QLabel(), QLabel()
-        self.cpu_meter, self.mem_meter = Meter(0), Meter(0)
-        for lbl, meter in ((self.cpu_label, self.cpu_meter), (self.mem_label, self.mem_meter)):
-            v.addWidget(lbl)
-            v.addWidget(meter)
-        g.widget(row)
         self._cpu = self.cpu_times()
+        self._net = self.net_bytes()
+        self._t = time.time()
         self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_load)
-        self.timer.start(2000)
-        self.update_load()
-        s = p.group("Services")
-        for key, unit, title, _desc in SERVICES:
-            s.widget(QLabel(f"{'●' if active(unit) else '○'}  {_(title)}"))
-        c = p.group()
-        c.action("Cockpit", "Full web admin panel: logs, users, storage", "Open",
-                 lambda: subprocess.Popen(["xdg-open", "https://localhost:9090"]))
-        return p
+        self.timer.timeout.connect(self.sample)
+        self.timer.start(1000)
+        self.nav.setCurrentRow(0)
+        fit(self, 1100, 720)
 
+    def show_page(self, row):
+        old = self.stack.widget(row)
+        self.stack.insertWidget(row, self.builders[row][3]())
+        self.stack.removeWidget(old)
+        old.deleteLater()
+        self.stack.setCurrentIndex(row)
+
+    # ---------- live numbers ----------
     @staticmethod
     def cpu_times():
         parts = [int(x) for x in Path("/proc/stat").read_text().split("\n", 1)[0].split()[1:]]
         return sum(parts), parts[3] + parts[4]
 
-    def update_load(self):
+    @staticmethod
+    def net_bytes():
+        rx = tx = 0
+        for line in Path("/proc/net/dev").read_text().splitlines()[2:]:
+            name, data = line.split(":", 1)
+            if name.strip() == "lo":
+                continue
+            f = data.split()
+            rx += int(f[0])
+            tx += int(f[8])
+        return rx, tx
+
+    @staticmethod
+    def mem_used():
+        d = {}
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            k, v = line.split(":", 1)
+            d[k] = int(v.split()[0])
+        return 100 * (1 - d.get("MemAvailable", 0) / max(d.get("MemTotal", 1), 1))
+
+    def sample(self):
         total, idle = self.cpu_times()
         dt, di = total - self._cpu[0], idle - self._cpu[1]
         self._cpu = (total, idle)
-        cpu = 1 - di / dt if dt else 0
-        mem = meminfo()
-        self.cpu_label.setText(_("Processor: {}%").format(round(cpu * 100)))
-        self.mem_label.setText(_("Memory: {}%").format(round(mem * 100)))
-        self.cpu_meter.set(cpu)
-        self.mem_meter.set(mem)
+        rx, tx = self.net_bytes()
+        now = time.time()
+        span = max(now - self._t, 0.1)
+        drx, dtx = (rx - self._net[0]) / span, (tx - self._net[1]) / span
+        self._net, self._t = (rx, tx), now
+        if getattr(self, "graphs", None):
+            try:
+                self.graphs["cpu"].push(100 * (1 - di / dt) if dt else 0)
+                self.graphs["mem"].push(self.mem_used())
+                self.graphs["down"].push(drx)
+                self.graphs["up"].push(dtx)
+            except RuntimeError:      # page was rebuilt
+                self.graphs = None
+
+    # ---------- pages ----------
+    def page_overview(self):
+        p = Page("Overview")
+        grid = QWidget()
+        g = QGridLayout(grid)
+        g.setContentsMargins(0, 0, 0, 0)
+        g.setSpacing(12)
+        self.graphs = {"cpu": Graph("Processor", "#e95420"), "mem": Graph("Memory", "#f6a03d"),
+                       "down": Graph("Network in", "#0ea5e9", unit="B"), "up": Graph("Network out", "#14b8a6", unit="B")}
+        for i, key in enumerate(("cpu", "mem", "down", "up")):
+            g.addWidget(self.graphs[key], i // 2, i % 2)
+        p.add(grid)
+        info = p.group("This server")
+        uptime = float(Path("/proc/uptime").read_text().split()[0])
+        load = Path("/proc/loadavg").read_text().split()[:3]
+        info.widget(QLabel(_("Up for {} h {} min").format(int(uptime // 3600), int(uptime % 3600 // 60))
+                           + "    ·    " + _("Load: {}").format(" ".join(load))))
+        du = shutil.disk_usage("/")
+        disk = QWidget()
+        dv = QVBoxLayout(disk)
+        dv.setContentsMargins(0, 4, 0, 4)
+        dv.addWidget(QLabel(_("Disk: {} of {} used").format(human(du.used), human(du.total))))
+        dv.addWidget(Meter(du.used / du.total))
+        info.widget(disk)
+        s = p.group("Services")
+        row = QWidget()
+        h = QHBoxLayout(row)
+        h.setContentsMargins(0, 4, 0, 4)
+        for _k, unit, title, _d in SERVICES:
+            st = unit_state(unit)
+            dot = QLabel(f"<span style='color:{'#30a46c' if st == 'active' else '#888'}'>●</span> {_(title)}")
+            h.addWidget(dot)
+            h.addSpacing(14)
+        h.addStretch(1)
+        s.widget(row)
+        c = p.group()
+        c.action("Cockpit", "Full web admin panel: logs, users, storage", "Open",
+                 lambda: subprocess.Popen(["xdg-open", "https://localhost:9090"]))
+        return p
 
     def page_services(self):
         p = Page("Services", "Turning a service on also opens its port in the firewall.")
         g = p.group()
         for key, unit, title, desc in SERVICES:
+            st = unit_state(unit)
+            label = f"{_(title)}  ·  {_('running') if st == 'active' else _('stopped')}"
+
             def toggle(on, k=key, u=unit):
-                if on:
-                    in_terminal("nebula", "server", "enable", k)
-                else:
-                    in_terminal("sudo", "systemctl", "disable", "--now", u)
-            g.switch(title, desc, active(unit), toggle)
+                in_terminal("nebula", "server", "enable", k) if on else in_terminal("sudo", "systemctl", "disable", "--now", u)
+            g.switch(label, desc, st == "active", toggle)
+        lg = p.group("Logs")
+        for _k, unit, title, _d in SERVICES:
+            lg.action(title, unit, "Show", lambda u=unit: Logs(self, u).exec())
+        lg.action("Whole system", "journalctl", "Show", lambda: in_terminal("journalctl", "-e"))
+        return p
+
+    def page_containers(self):
+        p = Page("Containers", "Docker containers on this server.")
+        g = p.group()
+        if not shutil.which("docker"):
+            g.action("Docker is not installed", "", "Install", lambda: in_terminal("nebula", "server", "enable", "docker"),
+                     primary=True)
+            return p
+        status = QLabel(_("Checking…"))
+        g.widget(status)
+
+        def got(out):
+            if not isinstance(out, str):
+                status.setText(_("Docker is not running."))
+                return
+            rows = [line.split("\t") for line in out.strip().splitlines() if line.strip()]
+            status.setText(_("Containers: {}").format(len(rows)) if rows else _("No containers yet."))
+            for name, image, state in [(r + ["", "", ""])[:3] for r in rows]:
+                running = state.lower().startswith("up")
+                g.action(name, f"{image}  ·  {state}", "Stop" if running else "Start",
+                         lambda n=name, run=running: in_terminal("sudo", "docker", "stop" if run else "start", n))
+        background(lambda: subprocess.run(["sudo", "-n", "docker", "ps", "-a", "--format",
+                                           "{{.Names}}\t{{.Image}}\t{{.Status}}"],
+                                          capture_output=True, text=True, timeout=10).stdout, got)
         return p
 
     def page_templates(self):
@@ -122,8 +288,7 @@ class Panel(QMainWindow):
         root = Path("/usr/share/nebulaos/templates")
         for name in sorted(x.name for x in root.iterdir()) if root.exists() else []:
             title, desc = TEMPLATES.get(name, (name, ""))
-            deployed = Path(f"/srv/nebula/{name}/compose.yaml").exists()
-            if deployed:
+            if Path(f"/srv/nebula/{name}/compose.yaml").exists():
                 g.action(title, desc, "Remove", lambda n=name: in_terminal("nebula", "template", "remove", n))
             else:
                 g.action(title, desc, "Deploy", lambda n=name: in_terminal("nebula", "template", "deploy", n))
@@ -132,11 +297,17 @@ class Panel(QMainWindow):
     def page_firewall(self):
         p = Page("Firewall")
         g = p.group()
-        on = active("ufw")
+        on = unit_state("ufw") == "active"
         g.switch("Firewall", "Block incoming connections except open services", on,
-                 lambda en: in_terminal("nebula", "server", "firewall") if en
-                 else in_terminal("sudo", "ufw", "disable"))
-        g.action("Rules", "", "Show", lambda: in_terminal("sudo", "ufw", "status", "numbered"))
+                 lambda en: in_terminal("nebula", "server", "firewall") if en else in_terminal("sudo", "ufw", "disable"))
+        rules = p.group("Rules")
+        out = subprocess.run(["sudo", "-n", "ufw", "status"], capture_output=True, text=True).stdout
+        lines = [l for l in out.splitlines()[4:] if l.strip()]
+        if lines:
+            for l in lines[:30]:
+                rules.widget(QLabel(" ".join(l.split())))
+        else:
+            rules.action("Rules", "", "Show", lambda: in_terminal("sudo", "ufw", "status", "numbered"))
         return p
 
 

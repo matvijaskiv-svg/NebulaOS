@@ -231,6 +231,7 @@ class Games(QMainWindow):
         for i, c in enumerate(self.covers):
             grid.addWidget(c, i // 7, i % 7, Qt.AlignLeft)
         grid.setColumnStretch(7, 1)
+        grid.setRowStretch(len(self.covers) // 7 + 1, 1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)

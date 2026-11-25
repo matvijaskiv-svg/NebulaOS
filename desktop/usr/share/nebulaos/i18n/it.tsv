@@ -696,3 +696,52 @@ proprietary	proprietaria
 Source	Fonte
 Website	Sito web
 Loading…	Caricamento…
+Play	Gioca
+Your games	I tuoi giochi
+On disk: {}	Su disco: {}
+Network devices	Dispositivi in rete
+Who is on your local network right now.	Chi è ora nella tua rete locale.
+Address	Indirizzo
+Name / vendor	Nome / produttore
+Scan the network	Scansiona la rete
+Scan	Scansiona
+Port check	Controllo porte
+Which services a computer you own has open.	Quali servizi sono aperti su un tuo computer.
+Port	Porta
+State	Stato
+Service	Servizio
+Version	Versione
+Check ports	Controlla le porte
+Wi-Fi around	Wi-Fi intorno
+Networks your Wi-Fi card can see.	Reti visibili dalla tua scheda Wi-Fi.
+Channel	Canale
+Public address	Indirizzo pubblico
+Press Scan.	Premi Scansiona.
+Address or name	Indirizzo o nome
+Searching…	Ricerca…
+Scanning… up to a minute.	Scansione… fino a un minuto.
+Install Nmap for a full scan	Installa Nmap per una scansione completa
+Basic check without Nmap	Controllo base senza Nmap
+This computer: {}	Questo computer: {}
+This is not an address.	Questo non è un indirizzo.
+Checking {}…	Controllo {}…
+Devices found: {}	Dispositivi trovati: {}
+Open ports: {}	Porte aperte: {}
+Networks: {}	Reti: {}
+open	aperta
+This server	Questo server
+Logs	Log
+Whole system	Tutto il sistema
+Docker containers on this server.	Container Docker su questo server.
+Network in	Rete in entrata
+Network out	Rete in uscita
+Docker is not installed	Docker non è installato
+No log entries yet.	Ancora nessuna voce.
+Docker is not running.	Docker non è in esecuzione.
+No containers yet.	Ancora nessun container.
+Disk: {} of {} used	Disco: usati {} su {}
+Load: {}	Carico: {}
+Containers: {}	Container: {}
+Up for {} h {} min	Attivo da {} h {} min
+running	attivo
+stopped	fermo

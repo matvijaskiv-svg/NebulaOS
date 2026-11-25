@@ -730,3 +730,52 @@ proprietary	пропрієтарна
 Source	Джерело
 Website	Сайт
 Loading…	Завантаження…
+Play	Грати
+Your games	Ваші ігри
+On disk: {}	На диску: {}
+Network devices	Пристрої в мережі
+Who is on your local network right now.	Хто зараз у вашій локальній мережі.
+Address	Адреса
+Name / vendor	Ім'я / виробник
+Scan the network	Сканувати мережу
+Scan	Сканувати
+Port check	Перевірка портів
+Which services a computer you own has open.	Які служби відкриті на вашому комп'ютері.
+Port	Порт
+State	Стан
+Service	Служба
+Version	Версія
+Check ports	Перевірити порти
+Wi-Fi around	Wi-Fi навколо
+Networks your Wi-Fi card can see.	Мережі, які бачить ваш Wi-Fi.
+Channel	Канал
+Public address	Зовнішня адреса
+Press Scan.	Натисніть «Сканувати».
+Address or name	Адреса або ім'я
+Searching…	Шукаю…
+Scanning… up to a minute.	Сканую… до хвилини.
+Install Nmap for a full scan	Для повного сканування встановіть Nmap
+Basic check without Nmap	Проста перевірка без Nmap
+This computer: {}	Цей комп'ютер: {}
+This is not an address.	Це не адреса.
+Checking {}…	Перевіряю {}…
+Devices found: {}	Знайдено пристроїв: {}
+Open ports: {}	Відкритих портів: {}
+Networks: {}	Мереж: {}
+open	відкрита
+This server	Цей сервер
+Logs	Журнали
+Whole system	Уся система
+Docker containers on this server.	Контейнери Docker на цьому сервері.
+Network in	Вхідний трафік
+Network out	Вихідний трафік
+Docker is not installed	Docker не встановлено
+No log entries yet.	Записів поки немає.
+Docker is not running.	Docker не запущено.
+No containers yet.	Контейнерів поки немає.
+Disk: {} of {} used	Диск: зайнято {} з {}
+Load: {}	Навантаження: {}
+Containers: {}	Контейнерів: {}
+Up for {} h {} min	Працює {} год {} хв
+running	працює
+stopped	зупинено

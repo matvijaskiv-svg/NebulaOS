@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""Toolkit (Hacking mode): privacy switches, practice labs, network tools and
-information about your network — for your own systems and labs only."""
+"""Toolkit (Hacking mode): real results in the window — devices on your network,
+open ports of a host you own, Wi-Fi networks around, your addresses — plus Tor,
+random MAC, practice labs and the classic tools. For your own devices and labs only.
+"""
+import ipaddress
 import re
 import shutil
 import socket
@@ -10,11 +13,14 @@ import sys
 sys.path.insert(0, "/usr/lib/nebulaos")
 from nebula_qt import _, Page, app, background, fit, in_terminal, run, tile  # noqa: E402
 from PySide6.QtCore import QSize, Qt  # noqa: E402
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QStackedWidget, QWidget  # noqa: E402
+from PySide6.QtGui import QGuiApplication  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QPushButton,
+    QStackedWidget, QTableWidget, QTableWidgetItem, QWidget,
+)
 
-TOOLS = [  # (name, description, package, how to run)
+TOOLS = [  # (name, description, package, command)
     ("Wireshark", "Look at network traffic", "wireshark-qt", ["wireshark"]),
-    ("Nmap", "Scan your own network", "nmap", ["term", "nmap", "--help"]),
     ("ZAP", "Test your own web apps", "zaproxy", ["zaproxy"]),
     ("Ghidra", "Reverse engineering", "ghidra", ["ghidra"]),
     ("Metasploit", "Exploit framework for labs", "metasploit", ["term", "msfconsole"]),
@@ -31,7 +37,88 @@ def local_ip():
         s.close()
         return ip
     except OSError:
-        return "—"
+        return ""
+
+
+def local_net():
+    out = subprocess.run(["ip", "-o", "-4", "addr", "show", "scope", "global"], capture_output=True, text=True).stdout
+    m = re.search(r"inet (\d+\.\d+\.\d+\.\d+/\d+)", out)
+    if not m:
+        return None
+    net = ipaddress.ip_network(m.group(1), strict=False)
+    return str(net if 22 <= net.prefixlen <= 30 else ipaddress.ip_network(f"{local_ip()}/24", strict=False))
+
+
+def scan_network():
+    """[(ip, mac, name)] — nmap ping scan when installed, else the neighbour table."""
+    net = local_net()
+    rows = []
+    if net and shutil.which("nmap"):
+        out = subprocess.run(["nmap", "-sn", "-T4", net], capture_output=True, text=True, timeout=120).stdout
+        host = None
+        for line in out.splitlines():
+            m = re.match(r"Nmap scan report for (?:(\S+) \()?(\d+\.\d+\.\d+\.\d+)\)?", line)
+            if m:
+                host = [m.group(2), "", m.group(1) or ""]
+                rows.append(host)
+            m = re.match(r"MAC Address: (\S+)(?: \((.*)\))?", line)
+            if m and host:
+                host[1] = m.group(1)
+                host[2] = host[2] or (m.group(2) or "")
+    else:
+        out = subprocess.run(["ip", "neigh"], capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            f = line.split()
+            if f and "lladdr" in f:
+                rows.append([f[0], f[f.index("lladdr") + 1], ""])
+    return [tuple(r) for r in rows]
+
+
+def scan_ports(host):
+    if shutil.which("nmap"):
+        out = subprocess.run(["nmap", "-T4", "--top-ports", "200", "-sV", "--version-light", host],
+                             capture_output=True, text=True, timeout=300).stdout
+        return [tuple((line.split(None, 3) + ["", "", ""])[:4]) for line in out.splitlines()
+                if re.match(r"^\d+/(tcp|udp)\s", line)]
+    rows = []
+    for port in (21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 3306, 3389, 5432, 5900, 8080, 9090):
+        try:
+            with socket.create_connection((host, port), timeout=0.4):
+                rows.append((f"{port}/tcp", "open", "", ""))
+        except OSError:
+            pass
+    return rows
+
+
+def wifi_networks():
+    out = subprocess.run(["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,CHAN", "dev", "wifi", "list"],
+                         capture_output=True, text=True, timeout=30).stdout
+    rows = []
+    for line in out.splitlines():
+        parts = re.split(r"(?<!\\):", line)
+        if len(parts) >= 4 and parts[0]:
+            rows.append((parts[0].replace("\\:", ":"), parts[1] + "%", parts[2] or _("open"), parts[3]))
+    return sorted(rows, key=lambda r: -int(r[1].rstrip("%") or 0))
+
+
+def table(headers):
+    t = QTableWidget(0, len(headers))
+    t.setHorizontalHeaderLabels([_(h) for h in headers])
+    t.verticalHeader().hide()
+    t.setEditTriggers(QTableWidget.NoEditTriggers)
+    t.setSelectionBehavior(QTableWidget.SelectRows)
+    t.setShowGrid(False)
+    t.setAlternatingRowColors(True)
+    t.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+    t.setMinimumHeight(320)
+    return t
+
+
+def fill(t, rows):
+    t.setRowCount(len(rows))
+    for r, row in enumerate(rows):
+        for c, val in enumerate(row):
+            t.setItem(r, c, QTableWidgetItem(str(val)))
 
 
 class Toolkit(QMainWindow):
@@ -43,10 +130,12 @@ class Toolkit(QMainWindow):
         self.nav.setFixedWidth(220)
         self.nav.setIconSize(QSize(24, 24))
         self.stack = QStackedWidget()
-        for title, icon, color, page in (("Privacy", "security-high", "#5b6b7f", self.page_privacy),
-                                         ("Labs", "applications-science", "#22c55e", self.page_labs),
-                                         ("Tools", "utilities-terminal", "#0ea5e9", self.page_tools),
-                                         ("Network", "network-wired", "#f59e0b", self.page_network)):
+        for title, icon, color, page in (("Network devices", "network-workgroup", "#0a84ff", self.page_devices),
+                                         ("Port check", "network-server", "#ff9f0a", self.page_ports),
+                                         ("Wi-Fi around", "network-wireless", "#30d158", self.page_wifi),
+                                         ("Privacy", "security-high", "#5b6b7f", self.page_privacy),
+                                         ("Labs", "applications-science", "#bf5af2", self.page_labs),
+                                         ("Tools", "utilities-terminal", "#64d2ff", self.page_tools)):
             item = QListWidgetItem(tile(icon, color), _(title))
             item.setSizeHint(QSize(0, 38))
             self.nav.addItem(item)
@@ -60,19 +149,95 @@ class Toolkit(QMainWindow):
         lay.addWidget(self.stack, 1)
         self.setCentralWidget(body)
         self.nav.setCurrentRow(0)
-        fit(self, 1000, 680)
+        fit(self, 1080, 700)
+
+    def page_devices(self):
+        p = Page("Network devices", "Who is on your local network right now.")
+        g = p.group()
+        ip = local_ip()
+        g.action(_("This computer: {}").format(ip or "—"), local_net() or "", "Copy",
+                 lambda: QGuiApplication.clipboard().setText(ip))
+        status = QLabel(_("Press Scan."))
+        status.setStyleSheet("color: palette(placeholder-text);")
+        t = table(["Address", "MAC", "Name / vendor"])
+
+        def scan():
+            status.setText(_("Scanning… up to a minute."))
+            btn.setEnabled(False)
+
+            def done(rows):
+                btn.setEnabled(True)
+                rows = rows if isinstance(rows, list) else []
+                status.setText(_("Devices found: {}").format(len(rows)))
+                fill(t, rows)
+            background(scan_network, done)
+        btn = g.action("Scan the network", "nmap -sn" if shutil.which("nmap") else _("Install Nmap for a full scan"),
+                       "Scan", scan, primary=True)
+        p.add(status)
+        p.add(t)
+        return p
+
+    def page_ports(self):
+        p = Page("Port check", "Which services a computer you own has open.")
+        g = p.group()
+        host = QLineEdit(local_ip() or "127.0.0.1")
+        host.setPlaceholderText(_("Address or name"))
+        g.widget(host)
+        status = QLabel("")
+        status.setStyleSheet("color: palette(placeholder-text);")
+        t = table(["Port", "State", "Service", "Version"])
+
+        def scan():
+            target = host.text().strip()
+            if not re.match(r"^[A-Za-z0-9.\-:]+$", target):
+                status.setText(_("This is not an address."))
+                return
+            status.setText(_("Checking {}…").format(target))
+
+            def done(rows):
+                rows = rows if isinstance(rows, list) else []
+                status.setText(_("Open ports: {}").format(len(rows)))
+                fill(t, rows)
+            background(lambda: scan_ports(target), done)
+        g.action("Check ports", "nmap --top-ports 200" if shutil.which("nmap") else _("Basic check without Nmap"),
+                 "Check", scan, primary=True)
+        p.add(status)
+        p.add(t)
+        return p
+
+    def page_wifi(self):
+        p = Page("Wi-Fi around", "Networks your Wi-Fi card can see.")
+        t = table(["Network", "Signal", "Security", "Channel"])
+        status = QLabel(_("Searching…"))
+        status.setStyleSheet("color: palette(placeholder-text);")
+
+        def refresh():
+            def done(rows):
+                rows = rows if isinstance(rows, list) else []
+                status.setText(_("Networks: {}").format(len(rows)))
+                fill(t, rows)
+            background(wifi_networks, done)
+        g = p.group()
+        g.action("Refresh", "", "Refresh", refresh)
+        p.add(status)
+        p.add(t)
+        refresh()
+        return p
 
     def page_privacy(self):
         p = Page("Privacy")
         g = p.group()
-        tor_on = "on" in run("tor", "status")[1].lower() and "off" not in run("tor", "status")[1].lower()
-        g.switch("Tor", "Anonymous connection on 127.0.0.1:9050; run an app through it with torsocks", tor_on,
-                 lambda on: in_terminal("nebula", "tor", "on" if on else "off"))
+        st = run("tor", "status")[1].lower()
+        g.switch("Tor", "Anonymous connection on 127.0.0.1:9050; run an app through it with torsocks",
+                 "on" in st and "off" not in st, lambda on: in_terminal("nebula", "tor", "on" if on else "off"))
         g.switch("Random MAC address", "A new hardware address for Wi-Fi and Ethernet", False,
                  lambda on: in_terminal("nebula", "privacy", "mac", "on" if on else "off"))
-        g.action("Tor Browser", "", "Open",
-                 lambda: subprocess.Popen(["torbrowser-launcher"]) if shutil.which("torbrowser-launcher")
-                 else subprocess.Popen(["nebula-store"]))
+        pub = p.group("Public address")
+        lbl = QLabel("…")
+        pub.widget(lbl)
+        background(lambda: subprocess.run(["curl", "-s", "--max-time", "6", "https://ifconfig.me"],
+                                          capture_output=True, text=True).stdout.strip(),
+                   lambda ip: lbl.setText(ip if isinstance(ip, str) and ip else "—"))
         return p
 
     def page_labs(self):
@@ -80,11 +245,8 @@ class Toolkit(QMainWindow):
         g = p.group()
         labs = re.findall(r"^\s+(\S+)\s+(http://127\.0\.0\.1:\d+)", run("lab", "list")[1], re.M)
         for name, url in labs:
-            row_start = lambda n=name: in_terminal("nebula", "lab", "start", n)
-            g.action(name, url, "Start", row_start)
-        if labs:
-            g.action("Stop a lab", "", "Stop…", lambda: in_terminal("bash", "-c", "nebula lab list; read -rp 'Lab: ' l; nebula lab stop \"$l\""))
-        else:
+            g.action(name, url, "Start", lambda n=name: in_terminal("nebula", "lab", "start", n))
+        if not labs:
             g.action("Labs need Docker", "", "Install", lambda: in_terminal("nebula", "server", "enable", "docker"))
         return p
 
@@ -92,36 +254,13 @@ class Toolkit(QMainWindow):
         p = Page("Tools", "Use them only on your own devices and labs.")
         g = p.group()
         for name, desc, pkg, cmd in TOOLS:
-            if shutil.which(cmd[1] if cmd[0] == "term" else cmd[0]):
+            exe = cmd[1] if cmd[0] == "term" else cmd[0]
+            if shutil.which(exe):
                 action = (lambda c=cmd: in_terminal(*c[1:])) if cmd[0] == "term" else (lambda c=cmd: subprocess.Popen(c))
                 g.action(name, desc, "Open", action)
             else:
                 g.action(name, desc, "Install", lambda pk=pkg: in_terminal("sudo", "pacman", "-S", "--needed", pk))
         return p
-
-    def page_network(self):
-        p = Page("Network")
-        g = p.group()
-        self.ip_label = QLabel(local_ip())
-        g.action("Local address", local_ip(), "Copy", lambda: QApplication_clip(local_ip()))
-        pub = QLabel("…")
-        pub.setStyleSheet("color: palette(placeholder-text);")
-        g.widget(QLabel(_("Public address:")))
-        g.widget(pub)
-
-        def got(ip):
-            pub.setText(ip if isinstance(ip, str) else "—")
-        background(lambda: subprocess.run(["curl", "-s", "--max-time", "6", "https://ifconfig.me"],
-                                          capture_output=True, text=True).stdout.strip(), got)
-        g.action("Interfaces and routes", "ip address · ip route", "Show",
-                 lambda: in_terminal("bash", "-c", "ip -c address; echo; ip -c route"))
-        g.action("Open ports on this computer", "ss -tulpn", "Show", lambda: in_terminal("sudo", "ss", "-tulpn"))
-        return p
-
-
-def QApplication_clip(text):
-    from PySide6.QtGui import QGuiApplication
-    QGuiApplication.clipboard().setText(text)
 
 
 def main():

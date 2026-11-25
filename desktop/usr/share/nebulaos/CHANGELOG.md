@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.8.1
+- Game Center like Big Picture, Server Panel with live graphs, logs and containers, Toolkit with network scan, port check and Wi-Fi list
+
 ## 0.8.0
 - App Store with the whole Flathub catalog (3000+ apps, screenshots, categories); space wallpapers in the colors of each mode
 
