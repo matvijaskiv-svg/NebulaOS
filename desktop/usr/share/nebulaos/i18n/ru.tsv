@@ -401,7 +401,7 @@ Disk to install to (for example /dev/sda or /dev/nvme0n1)	Диск для уст
 this is the Live medium you booted from	это Live-носитель, с которого вы загрузились
 Installation method	Способ установки
 dual boot needs the PC to be booted in UEFI mode	для дуал-бута компьютер должен быть загружен в режиме UEFI
-Settings	Параметры
+Settings	Настройки
 computer name: latin letters, digits, hyphen	имя компьютера: латиница, цифры, дефис
 invalid username	недопустимое имя пользователя
 Password: 	Пароль: 
@@ -699,3 +699,16 @@ Updating the package lists and installing {}…	Обновляю списки п
 {} is removed.	{} удалена.
 Something went wrong.	Что-то пошло не так.
 Cancelled, or no internet. Open Details to see why.	Отменено или нет интернета. Причина — в «Подробнее».
+Steam, MangoHud, game mode	Steam, MangoHud, игровой режим
+Network and security tools, Tor	Сетевые инструменты и безопасность, Tor
+Docker, Cockpit, firewall	Docker, Cockpit, файрвол
+Choose a language and a mode. You can change both later in Settings.	Выберите язык и режим. Потом их можно поменять в Настройках.
+All of this is also in Settings (Super+H).	Всё это есть и в Настройках (Super+H).
+NVIDIA graphics found — install the driver	Найдена видеокарта NVIDIA — установите драйвер
+Switches to Gaming when a game starts	Включает «Гейминг», когда запускается игра
+Changes apply right away.	Изменения применяются сразу.
+Stop charging at 80%	Заряжать до 80%
+Internet, drivers, sound, disk, services	Интернет, драйверы, звук, диск, службы
+NebulaOS and all apps. A snapshot is taken first.	NebulaOS и все программы. Сначала делается снимок системы.
+Runs on this computer, offline. Super+A.	Работает на этом компьютере, без интернета. Super+A.
+Messages	Сообщения

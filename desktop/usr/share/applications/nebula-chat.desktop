@@ -1,14 +1,14 @@
 [Desktop Entry]
+Name=Messages
+Name[ru]=Сообщения
+Name[uk]=Повідомлення
+Name[it]=Messaggi
+Comment=Chat with NebulaOS users
 Type=Application
-Name=Nebula Chat
 GenericName=Messenger
 GenericName[ru]=Мессенджер
 GenericName[uk]=Месенджер
 GenericName[it]=Messaggistica
-Comment=Private chat between NebulaOS users, without a server
-Comment[ru]=Личный чат между пользователями NebulaOS, без сервера
-Comment[uk]=Особистий чат між користувачами NebulaOS, без сервера
-Comment[it]=Chat privata tra utenti NebulaOS, senza server
 Exec=nebula-chat
 Icon=nebula-chat
 Categories=Network;InstantMessaging;

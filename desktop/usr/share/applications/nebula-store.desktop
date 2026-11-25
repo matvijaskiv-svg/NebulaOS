@@ -1,12 +1,9 @@
 [Desktop Entry]
-Name=Nebula Store
-Comment=Apps from Arch and Flathub
-Name[ru]=Nebula Store
-Comment[ru]=Программы из Arch и Flathub
-Name[uk]=Nebula Store
-Comment[uk]=Програми з Arch і Flathub
-Name[it]=Nebula Store
-Comment[it]=App da Arch e Flathub
+Name=App Store
+Name[ru]=App Store
+Name[uk]=App Store
+Name[it]=App Store
+Comment=Install and remove apps
 Exec=nebula-store
 X-KDE-Shortcuts=Meta+Shift+A
 Icon=nebula-store

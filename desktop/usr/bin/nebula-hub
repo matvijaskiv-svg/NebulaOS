@@ -31,9 +31,9 @@ SHARE = Path("/usr/share/nebulaos")
 CONF = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "nebulaos"
 LIVE = Path("/run/archiso").exists()
 MODES = [
-    ("gaming", "Gaming", "Neon look, turbo mode, Steam and MangoHud"),
-    ("hacking", "Hacking", "Catppuccin Mocha, network tools, Tor, practice labs"),
-    ("server", "Server", "Ubuntu-like style, Docker, Cockpit, ready-made servers"),
+    ("gaming", "Gaming", "Steam, MangoHud, game mode"),
+    ("hacking", "Hacking", "Network and security tools, Tor"),
+    ("server", "Server", "Docker, Cockpit, firewall"),
 ]
 # macOS-like palette for section tiles.
 BLUE, PURPLE, CYAN, PINK, GREEN, ORANGE, GRAY, INDIGO = (
@@ -94,7 +94,7 @@ def wallpapers():
 class Settings(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(_("NebulaOS Settings"))
+        self.setWindowTitle(_("Settings"))
         self.setStatusBar(QStatusBar())
         self.stack = QStackedWidget()
         self.nav = QListWidget()
@@ -274,7 +274,7 @@ class Settings(QMainWindow):
         quick.switch("Night light", "Warmer colors in the evening", night, lambda _on: run("nightlight"))
         self.power_combo(quick)
         c = p.group("Maintenance")
-        c.action("System check", "Internet, drivers, sound, disk, services — with fixes", "Check", lambda: in_terminal("nebula", "doctor"), primary=True)
+        c.action("System check", "Internet, drivers, sound, disk, services", "Check", lambda: in_terminal("nebula", "doctor"), primary=True)
         c.action("Clean up", "Free disk space safely", "Clean", lambda: in_terminal("nebula", "clean"))
         return p
 
@@ -344,7 +344,7 @@ class Settings(QMainWindow):
 
     # ---------- Look ----------
     def page_mode(self):
-        p = Page("Work mode", "Look and features change instantly, no re-login needed.")
+        p = Page("Work mode", "Changes apply right away.")
         self.mode_cards = {}
         row = QWidget()
         cards = QHBoxLayout(row)
@@ -532,7 +532,7 @@ class Settings(QMainWindow):
         self.power_combo(g)
         if bats and list(root.glob("BAT*/charge_control_end_threshold")):
             limit = run("battery", "status")[1]
-            g.switch("Battery care", "Charge only to 80% — the battery lasts years longer", "80" in limit,
+            g.switch("Battery care", "Stop charging at 80%", "80" in limit,
                      lambda on: in_terminal("nebula", "battery", "on" if on else "off"))
         g.action("Sleep, screen off and lid", "", "Settings…", lambda: kcm("kcm_powerdevilprofilesconfig"))
         return p
@@ -543,7 +543,7 @@ class Settings(QMainWindow):
         g = p.group()
         status = QLabel(_("Checking…"))
         g.widget(status)
-        g.action("Update the system", "NebulaOS and all apps; snapshots are taken before and after", "Update",
+        g.action("Update the system", "NebulaOS and all apps. A snapshot is taken first.", "Update",
                  lambda: in_terminal("nebula", "update"), primary=True)
         snap = p.group("System snapshots", "Btrfs + Snapper. Roll back from the GRUB menu → NebulaOS snapshots.")
         snap.action("Create a snapshot", "", "Create", lambda: in_terminal("nebula", "snapshot", "create"))
@@ -672,7 +672,7 @@ class Settings(QMainWindow):
         return p
 
     def page_ai(self):
-        p = Page("Assistant", "Local Ollama model: your data never leaves this computer. Super+A opens the assistant.")
+        p = Page("Assistant", "Runs on this computer, offline. Super+A.")
         g = p.group()
         conf = CONF / "assistant.conf"
         model_now = ""

@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.7.5
+- New macOS-style login screen, clean startup sound, plain app names and texts
+
 ## 0.7.4
 - Nebula Store installs apps right in the window with a progress bar; 100+ apps
 

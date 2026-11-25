@@ -1,12 +1,9 @@
 [Desktop Entry]
-Name=Nebula AI
-Comment=Local AI assistant
-Name[ru]=Nebula AI
-Comment[ru]=Локальный AI-ассистент
-Name[uk]=Nebula AI
-Comment[uk]=Локальний AI-асистент
-Name[it]=Nebula AI
-Comment[it]=Assistente IA locale
+Name=Assistant
+Name[ru]=Ассистент
+Name[uk]=Асистент
+Name[it]=Assistente
+Comment=Offline assistant
 Exec=nebula-ai-overlay
 X-KDE-Shortcuts=Meta+A
 Icon=nebula-assistant

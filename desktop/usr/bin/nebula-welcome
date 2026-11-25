@@ -18,9 +18,9 @@ from PySide6.QtWidgets import (  # noqa: E402
 SHARE = Path("/usr/share/nebulaos")
 CONF = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "nebulaos"
 MODES = [
-    ("gaming", "Gaming", "Neon look, turbo mode, Steam and MangoHud"),
-    ("hacking", "Hacking", "Catppuccin Mocha, network tools, Tor, practice labs"),
-    ("server", "Server", "Ubuntu-like style, Docker, Cockpit, ready-made servers"),
+    ("gaming", "Gaming", "Steam, MangoHud, game mode"),
+    ("hacking", "Hacking", "Network and security tools, Tor"),
+    ("server", "Server", "Docker, Cockpit, firewall"),
 ]
 
 
@@ -115,8 +115,7 @@ class Welcome(QWidget):
         logo.setAlignment(Qt.AlignCenter)
         lay.addWidget(logo)
         lay.addWidget(heading("Welcome to NebulaOS"))
-        lay.addWidget(muted("Three work modes, a macOS-style desktop and everything at hand.\n"
-                            "Let's set things up in a minute."))
+        lay.addWidget(muted("Choose a language and a mode. You can change both later in Settings."))
         lay.addSpacing(14)
         row = QHBoxLayout()
         row.addStretch(1)
@@ -186,15 +185,15 @@ class Welcome(QWidget):
     def page_setup(self):
         w, lay = self.page()
         lay.addWidget(heading("Useful settings", 1.5))
-        lay.addWidget(muted("All of this is also in NebulaOS Settings (Super+H)."))
+        lay.addWidget(muted("All of this is also in Settings (Super+H)."))
         g = Group()
         nvidia = has_nvidia()
         g.action("Graphics drivers",
-                 "NVIDIA graphics found — install the driver for full speed" if nvidia else "NVIDIA, AMD or Intel",
+                 "NVIDIA graphics found — install the driver" if nvidia else "NVIDIA, AMD or Intel",
                  "Detect", lambda: in_terminal("nebula", "drivers"), primary=nvidia)
         g.action("AI assistant", "Download the local qwen2.5 model (~1 GB)", "Download",
                  lambda: in_terminal("ollama", "pull", "qwen2.5:1.5b"))
-        g.switch("Auto mode", "Launch a game and Gaming mode turns on", False,
+        g.switch("Auto mode", "Switches to Gaming when a game starts", False,
                  lambda on: run("automode", "on" if on else "off"))
         g.switch("MangoHud in games", "Show FPS on top of games", False,
                  lambda on: run("game", "mangohud", "on" if on else "off"))

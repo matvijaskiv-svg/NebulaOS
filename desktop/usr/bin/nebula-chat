@@ -150,7 +150,7 @@ class Chat(QMainWindow):
     def __init__(self, tox):
         super().__init__()
         self.tox = tox
-        self.setWindowTitle("Nebula Chat")
+        self.setWindowTitle(_("Messages"))
         self.state = self.load()
         self.online, self.typing_now, self.peers = {}, {}, {}
         self.current = None              # "u:<pk>" or "g:<chat_id>"
@@ -435,7 +435,7 @@ class Chat(QMainWindow):
                 keep = item
         for pk, r in self.state["requests"].items():
             add("r", "r:" + pk, tile("list-add-user", "#f59e0b", 34),
-                ("🛟 " if r.get("support") else "") + _("Request: {}").format(r["name"]))
+                ("★ " if r.get("support") else "") + _("Request: {}").format(r["name"]))
         for key, inv in self.state["invites"].items():
             add("i", key, tile("system-users", "#f59e0b", 34), _("Invitation: {}").format(inv["name"]))
         chats = [("u:" + pk, c) for pk, c in self.state["contacts"].items()] + \
@@ -1246,7 +1246,7 @@ class Chat(QMainWindow):
         card.setObjectName("group")
         v = QVBoxLayout(card)
         v.setContentsMargins(14, 12, 14, 12)
-        q = QLabel("📊 " + str(poll.get("question", "")))
+        q = QLabel(str(poll.get("question", "")))
         f = q.font()
         f.setBold(True)
         q.setFont(f)

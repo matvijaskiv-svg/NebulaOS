@@ -257,7 +257,7 @@ class AppCard(QFrame):
 class Store(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Nebula Store")
+        self.setWindowTitle("App Store")
         try:
             self.catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
         except (OSError, ValueError):

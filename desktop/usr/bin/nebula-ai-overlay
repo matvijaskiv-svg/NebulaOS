@@ -34,7 +34,7 @@ BUBBLE = {
 class Assistant(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Nebula AI")
+        self.setWindowTitle(_("Assistant"))
         self.messages = None
         self.steps = 0
 
