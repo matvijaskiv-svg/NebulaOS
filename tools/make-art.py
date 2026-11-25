@@ -239,15 +239,15 @@ def nebula_wallpaper(w, h, spec, seed, logo=None):
 
 
 SPECS = {
-    # Гейминг: глубокий космос, неоновый фиолетовый → бирюзовый → малиновый.
-    "gaming": {"top": "#04040a", "bottom": "#0a0718", "palette": ["#2e1a8f", "#7c3aed", "#0ea5c6", "#db2777"],
-               "core": "#f0abfc", "glow": 0.30, "density": 0.90, "stars": 0.0010, "grain": 6, "axis": (0.18, 0.62)},
-    # Хакинг: Catppuccin Mocha — тихая лиловая туманность на тёмном фоне.
-    "hacking": {"top": "#1e1e2e", "bottom": "#11111b", "palette": ["#313244", "#6c5a9c", "#cba6f7", "#89b4fa"],
-                "core": "#f5c2e7", "glow": 0.28, "density": 0.85, "stars": 0.0006, "grain": 4, "axis": (0.20, 0.55)},
-    # Сервер: тёплый баклажан с оранжевым ядром в духе Ubuntu.
-    "server": {"top": "#1a0013", "bottom": "#2c0621", "palette": ["#4a1d47", "#77216f", "#c2410c", "#e95420"],
-               "core": "#fdba74", "glow": 0.18, "density": 0.78, "stars": 0.0004, "grain": 5, "axis": (0.15, 0.65), "seed": 314},
+    # Гейминг: чёрный космос, красно-оранжевая туманность (как акцент режима).
+    "gaming": {"top": "#050506", "bottom": "#0d0809", "palette": ["#3a0a0e", "#a3121c", "#e5484d", "#ff8a3d"],
+               "core": "#ffd2b0", "glow": 0.26, "density": 0.88, "stars": 0.0010, "grain": 6, "axis": (0.18, 0.62)},
+    # Хакинг: графитовый космос, синяя туманность в цвете macOS.
+    "hacking": {"top": "#0b0c0f", "bottom": "#080a10", "palette": ["#0c1f44", "#0a4fb0", "#0a84ff", "#64d2ff"],
+                "core": "#d6efff", "glow": 0.26, "density": 0.85, "stars": 0.0008, "grain": 5, "axis": (0.20, 0.55)},
+    # Сервер: нейтральный тёмно-серый космос с оранжевой туманностью Ubuntu.
+    "server": {"top": "#121212", "bottom": "#1a1513", "palette": ["#3a2a22", "#8a3415", "#e95420", "#f6a03d"],
+               "core": "#ffe0b8", "glow": 0.20, "density": 0.80, "stars": 0.0006, "grain": 5, "axis": (0.15, 0.65), "seed": 314},
 }
 
 
