@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phone (KDE Connect): pair your phone in three steps, then send files, ring it,
+"""Nebula Link (built on KDE Connect): pair your phone in three steps, then send files, ring it,
 share the clipboard; phone notifications appear on the computer."""
 import re
 import subprocess
@@ -37,7 +37,7 @@ def devices():
 class Phone(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(_("Phone"))
+        self.setWindowTitle("Nebula Link")
         self.devs = None
         self.signature = None
         self.timer = QTimer(self)
@@ -58,7 +58,7 @@ class Phone(QMainWindow):
             self.render()
 
     def render(self):
-        p = Page("Phone", "Your phone and this computer work together: notifications, files, clipboard.")
+        p = Page("Nebula Link", "Your phone and this computer work together: notifications, files, clipboard, links.")
         paired = [d for d in (self.devs or []) if d[2]]
         if not paired:
             s1 = p.group("1. Install KDE Connect on the phone")
@@ -79,6 +79,8 @@ class Phone(QMainWindow):
             g.action("Find my phone", "It rings loudly, even in silent mode", "Ring",
                      lambda d=did: kc("--ring", "-d", d))
             g.action("Send the clipboard", "", "Send", lambda d=did: kc("--send-clipboard", "-d", d))
+            g.action("Continue on the phone", "Open a link or a file on the phone", "Send a link…",
+                     lambda d=did: self.send_link(d))
             g.action("Unpair", "", "Unpair", lambda d=did: (kc("--unpair", "-d", d), self.poll()))
         more = p.group()
         more.action("All KDE Connect settings", "Remote input, media control, battery, shared folders", "Open",
@@ -87,7 +89,15 @@ class Phone(QMainWindow):
 
     def pair(self, did):
         kc("--pair", "-d", did)
-        QMessageBox.information(self, _("Phone"), _("Now confirm the request on the phone."))
+        QMessageBox.information(self, "Nebula Link", _("Now confirm the request on the phone."))
+
+    def send_link(self, did):
+        from PySide6.QtGui import QGuiApplication
+        from PySide6.QtWidgets import QInputDialog
+        clip = QGuiApplication.clipboard().text().strip()
+        url, ok = QInputDialog.getText(self, "Nebula Link", _("Link:"), text=clip if clip.startswith("http") else "")
+        if ok and url.strip():
+            kc("--share", url.strip(), "-d", did)
 
     def send(self, did):
         files, _f = QFileDialog.getOpenFileNames(self, _("Send files"))

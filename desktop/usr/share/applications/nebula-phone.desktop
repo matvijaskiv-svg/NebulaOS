@@ -1,10 +1,8 @@
 [Desktop Entry]
+Name=Nebula Link
 Type=Application
-Name=Phone
-Name[ru]=Телефон
-Name[uk]=Телефон
-Name[it]=Telefono
-Comment=Pair your phone
+Comment=Your phone and computer together
+Keywords=phone;android;iphone;kdeconnect;телефон;
 Exec=nebula-phone
 Icon=smartphone
 Categories=Network;

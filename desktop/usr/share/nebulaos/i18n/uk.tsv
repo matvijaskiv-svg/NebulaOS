@@ -862,3 +862,27 @@ Firmware is up to date.	Прошивки актуальні.
 Hourly backups enabled.\n	Щогодинні копії увімкнено.\n
 Automatic backups disabled.\n	Автоматичні копії вимкнено.\n
 the backup drive is not connected	диск для копій не підключено
+Your phone and this computer work together: notifications, files, clipboard, links.	Телефон і комп'ютер працюють разом: сповіщення, файли, буфер обміну, посилання.
+Continue on the phone	Продовжити на телефоні
+Open a link or a file on the phone	Відкрити посилання або файл на телефоні
+Send a link…	Надіслати посилання…
+Link:	Посилання:
+Your own cloud (Nextcloud)	Власна хмара (Nextcloud)
+Files, photos and calendar — http://this-computer:8080	Файли, фото й календар — http://цей-комп'ютер:8080
+Ad blocker for the home (Pi-hole)	Блокування реклами для всього дому (Pi-hole)
+Panel on port 8081, password nebulaos; set this computer as DNS	Панель на порту 8081, пароль nebulaos; вкажіть цей комп'ютер як DNS у роутері
+Lessons	Уроки
+Step by step, on practice labs that run only on this computer.	Крок за кроком, на навчальних стендах лише на цьому комп'ютері.
+Start the lab	Запустити стенд
+Ask for a hint	Попросити підказку
+Hint	Підказка
+Password check	Перевірка пароля
+Is a password in known leaks? Only the first 5 characters of its SHA-1 hash are sent; the password itself never leaves this computer.	Чи є пароль у відомих витоках? Надсилаються лише перші 5 символів його SHA-1 хешу; сам пароль не залишає комп'ютер.
+Check the password	Перевірити пароль
+No internet connection.	Немає підключення до інтернету.
+Found in leaks {} times. Do not use this password.	Знайдено у витоках {} разів. Не використовуйте цей пароль.
+Not found in known leaks.	У відомих витоках не знайдено.
+SQL injection	SQL-ін'єкція
+Cross-site scripting (XSS)	Міжсайтовий скриптинг (XSS)
+Broken login	Злам входу
+Network basics	Основи мереж

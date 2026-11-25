@@ -925,3 +925,27 @@ Firmware is up to date.	Прошивки актуальны.
 Hourly backups enabled.\n	Ежечасные копии включены.\n
 Automatic backups disabled.\n	Автоматические копии выключены.\n
 the backup drive is not connected	диск для копий не подключён
+Your phone and this computer work together: notifications, files, clipboard, links.	Телефон и компьютер работают вместе: уведомления, файлы, буфер обмена, ссылки.
+Continue on the phone	Продолжить на телефоне
+Open a link or a file on the phone	Открыть ссылку или файл на телефоне
+Send a link…	Отправить ссылку…
+Link:	Ссылка:
+Your own cloud (Nextcloud)	Своё облако (Nextcloud)
+Files, photos and calendar — http://this-computer:8080	Файлы, фото и календарь — http://этот-компьютер:8080
+Ad blocker for the home (Pi-hole)	Блокировка рекламы для всего дома (Pi-hole)
+Panel on port 8081, password nebulaos; set this computer as DNS	Панель на порту 8081, пароль nebulaos; укажите этот компьютер как DNS в роутере
+Lessons	Уроки
+Step by step, on practice labs that run only on this computer.	Шаг за шагом, на учебных стендах только на этом компьютере.
+Start the lab	Запустить стенд
+Ask for a hint	Попросить подсказку
+Hint	Подсказка
+Password check	Проверка пароля
+Is a password in known leaks? Only the first 5 characters of its SHA-1 hash are sent; the password itself never leaves this computer.	Есть ли пароль в известных утечках? Отправляются только первые 5 символов его SHA-1 хеша; сам пароль не покидает компьютер.
+Check the password	Проверить пароль
+No internet connection.	Нет подключения к интернету.
+Found in leaks {} times. Do not use this password.	Найден в утечках {} раз. Не используйте этот пароль.
+Not found in known leaks.	В известных утечках не найден.
+SQL injection	SQL-инъекция
+Cross-site scripting (XSS)	Межсайтовый скриптинг (XSS)
+Broken login	Взлом входа
+Network basics	Основы сетей

@@ -822,3 +822,24 @@ Firmware is up to date.	Il firmware è aggiornato.
 Hourly backups enabled.\n	Backup orari attivati.\n
 Automatic backups disabled.\n	Backup automatici disattivati.\n
 the backup drive is not connected	il disco di backup non è collegato
+Your phone and this computer work together: notifications, files, clipboard, links.	Telefono e computer lavorano insieme: notifiche, file, appunti, link.
+Continue on the phone	Continua sul telefono
+Open a link or a file on the phone	Apri un link o un file sul telefono
+Send a link…	Invia un link…
+Your own cloud (Nextcloud)	Il tuo cloud (Nextcloud)
+Files, photos and calendar — http://this-computer:8080	File, foto e calendario — http://questo-computer:8080
+Ad blocker for the home (Pi-hole)	Blocco pubblicità per tutta la casa (Pi-hole)
+Panel on port 8081, password nebulaos; set this computer as DNS	Pannello sulla porta 8081, password nebulaos; imposta questo computer come DNS
+Lessons	Lezioni
+Step by step, on practice labs that run only on this computer.	Passo dopo passo, su laboratori solo su questo computer.
+Start the lab	Avvia il laboratorio
+Ask for a hint	Chiedi un suggerimento
+Hint	Suggerimento
+Password check	Controllo password
+Is a password in known leaks? Only the first 5 characters of its SHA-1 hash are sent; the password itself never leaves this computer.	La password è in fughe note? Si inviano solo i primi 5 caratteri del suo hash SHA-1; la password non lascia il computer.
+Check the password	Controlla la password
+No internet connection.	Nessuna connessione a internet.
+Found in leaks {} times. Do not use this password.	Trovata nelle fughe {} volte. Non usare questa password.
+Not found in known leaks.	Non trovata nelle fughe note.
+Broken login	Login vulnerabile
+Network basics	Basi di rete

@@ -19,6 +19,47 @@ from PySide6.QtWidgets import (  # noqa: E402
     QStackedWidget, QTableWidget, QTableWidgetItem, QWidget,
 )
 
+LESSONS = [  # (title, lab, url path, steps — one step per line)
+    ("SQL injection", "dvwa", "/vulnerabilities/sqli/", [
+        "1. Start the DVWA lab and log in (admin / password), set Security to Low.",
+        "2. Open “SQL Injection”. Enter 1 and see what the page returns.",
+        "3. Try a quote ' — does the page break? That means input goes straight into SQL.",
+        "4. Make the query return every user. Ask the assistant for a hint if you are stuck.",
+        "5. Then set Security to Medium and see what changed — and how the fix works."]),
+    ("Cross-site scripting (XSS)", "dvwa", "/vulnerabilities/xss_r/", [
+        "1. In DVWA open “XSS (Reflected)”.",
+        "2. Type your name — where does it appear in the page?",
+        "3. Try making the page show an alert box with your own text.",
+        "4. Read the page source: why did it work? How would escaping stop it?"]),
+    ("Broken login", "juice-shop", "/#/login", [
+        "1. Start Juice Shop and open the login page.",
+        "2. Find a way to log in as the admin without knowing the password.",
+        "3. Open the Score Board (hidden page!) to track your progress.",
+        "4. Ask the assistant to explain the fix after you succeed."]),
+    ("Network basics", "", "", [
+        "1. Open “Network devices” and scan your home network.",
+        "2. Pick your router: open “Port check” and see which ports are open.",
+        "3. Ask the assistant what each open port is for and whether it should be open.",
+        "Only scan devices that belong to you."]),
+]
+
+
+def password_leaks(password):
+    """How many times the password appears in known leaks (Have I Been Pwned, k-anonymity:
+    only the first 5 characters of the SHA-1 hash leave this computer)."""
+    import hashlib
+    import urllib.request
+    digest = hashlib.sha1(password.encode()).hexdigest().upper()
+    req = urllib.request.Request(f"https://api.pwnedpasswords.com/range/{digest[:5]}",
+                                 headers={"User-Agent": "NebulaOS-Toolkit", "Add-Padding": "true"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        for line in r.read().decode().splitlines():
+            suffix, _sep, count = line.partition(":")
+            if suffix == digest[5:]:
+                return int(count)
+    return 0
+
+
 TOOLS = [  # (name, description, package, command)
     ("Wireshark", "Look at network traffic", "wireshark-qt", ["wireshark"]),
     ("ZAP", "Test your own web apps", "zaproxy", ["zaproxy"]),
@@ -135,6 +176,8 @@ class Toolkit(QMainWindow):
                                          ("Wi-Fi around", "network-wireless", "#30d158", self.page_wifi),
                                          ("Privacy", "security-high", "#5b6b7f", self.page_privacy),
                                          ("Labs", "applications-science", "#bf5af2", self.page_labs),
+                                         ("Lessons", "accessories-dictionary", "#ff375f", self.page_lessons),
+                                         ("Password check", "dialog-password", "#ffd60a", self.page_password),
                                          ("Tools", "utilities-terminal", "#64d2ff", self.page_tools)):
             item = QListWidgetItem(tile(icon, color), _(title))
             item.setSizeHint(QSize(0, 38))
@@ -248,6 +291,52 @@ class Toolkit(QMainWindow):
             g.action(name, url, "Start", lambda n=name: in_terminal("nebula", "lab", "start", n))
         if not labs:
             g.action("Labs need Docker", "", "Install", lambda: in_terminal("nebula", "server", "enable", "docker"))
+        return p
+
+    def page_lessons(self):
+        p = Page("Lessons", "Step by step, on practice labs that run only on this computer.")
+        for title, lab, path, steps in LESSONS:
+            g = p.group(title)
+            text = QLabel(chr(10).join(_(step) for step in steps))
+            text.setWordWrap(True)
+            g.widget(text)
+            if lab:
+                g.action("Start the lab", lab, "Start", lambda l=lab: in_terminal("nebula", "lab", "start", l))
+            g.action("Ask for a hint", "", "Hint", lambda t=title: subprocess.Popen(
+                ["nebula-ai-overlay", "--ask", f"I am doing the NebulaOS lesson '{t}' on my own practice lab. "
+                                               "Give me a small hint for the next step, not the full answer."]))
+        return p
+
+    def page_password(self):
+        p = Page("Password check", "Is a password in known leaks? Only the first 5 characters of its "
+                                   "SHA-1 hash are sent; the password itself never leaves this computer.")
+        g = p.group()
+        field = QLineEdit()
+        field.setEchoMode(QLineEdit.Password)
+        field.setPlaceholderText(_("Password"))
+        g.widget(field)
+        result = QLabel("")
+        result.setWordWrap(True)
+
+        def check():
+            pw = field.text()
+            if not pw:
+                return
+            result.setText(_("Checking…"))
+
+            def done(n):
+                if isinstance(n, Exception):
+                    result.setText(_("No internet connection."))
+                elif n:
+                    result.setText("⚠ " + _("Found in leaks {} times. Do not use this password.").format(n))
+                    result.setStyleSheet("color: #ff453a; font-weight: bold;")
+                else:
+                    result.setText("✓ " + _("Not found in known leaks."))
+                    result.setStyleSheet("color: #30d158; font-weight: bold;")
+            background(lambda: password_leaks(pw), done)
+        field.returnPressed.connect(check)
+        g.action("Check the password", "", "Check", check, primary=True)
+        g.widget(result)
         return p
 
     def page_tools(self):

@@ -29,7 +29,9 @@ SERVICES = [  # (key for `nebula server enable`, unit, title, description)
 ]
 TEMPLATES = {"files": ("File server", "Shared folders for your network"),
              "media": ("Media server", "Films and music for your devices"),
-             "minecraft": ("Minecraft server", "Play with friends")}
+             "minecraft": ("Minecraft server", "Play with friends"),
+             "nextcloud": ("Your own cloud (Nextcloud)", "Files, photos and calendar — http://this-computer:8080"),
+             "pihole": ("Ad blocker for the home (Pi-hole)", "Panel on port 8081, password nebulaos; set this computer as DNS")}
 
 
 def unit_state(unit):

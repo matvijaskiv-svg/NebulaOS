@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.9.1
+- Nebula Link (phone, send links), one-click Nextcloud and Pi-hole, Lessons and Password check in Toolkit
+
 ## 0.9.0
 - New: Control Center (Super+C), Spotlight (Super+Space), Time Machine style Backups, Phone pairing, Screen time with limits, Drivers app, desktop widgets for each mode
 

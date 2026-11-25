@@ -1,0 +1,11 @@
+# NebulaOS: Pi-hole — blocks ads for every device at home. Web panel on port 8081.
+# Then set this computer's address as the DNS server in your router.
+services:
+  pihole:
+    image: pihole/pihole:latest
+    restart: unless-stopped
+    ports: ["53:53/tcp", "53:53/udp", "8081:80/tcp"]
+    environment:
+      TZ: "Europe/Rome"
+      FTLCONF_webserver_api_password: "nebulaos"
+    volumes: ["./etc-pihole:/etc/pihole"]
