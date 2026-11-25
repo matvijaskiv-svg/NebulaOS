@@ -116,8 +116,24 @@ class Hero(QWidget):
             self.logo.hide()
             self.title.setText(game["name"])
             self.title.show()
-        self.meta.setText(_("On disk: {}").format(human(game["size"])) if game["size"] else "")
+        base = _("On disk: {}").format(human(game["size"])) if game["size"] else ""
+        self.meta.setText(base)
         self.update()
+        appid = game["appid"]
+
+        def tier():
+            import json
+            import urllib.request
+            req = urllib.request.Request(f"https://www.protondb.com/api/v1/reports/summaries/{appid}.json",
+                                         headers={"User-Agent": "NebulaOS"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                return json.loads(r.read().decode()).get("tier", "")
+
+        def got(t):
+            if isinstance(t, str) and t and self.meta.text() == base:
+                self.meta.setText((base + "   ·   " if base else "") + "ProtonDB: " + t.capitalize())
+        from nebula_qt import background
+        background(tier, got)
 
     def paintEvent(self, _e):
         p = QPainter(self)

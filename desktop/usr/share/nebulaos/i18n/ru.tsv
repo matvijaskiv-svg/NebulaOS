@@ -72,7 +72,7 @@ SOCKS5 127.0.0.1:9050, run apps with torsocks	SOCKS5 127.0.0.1:9050, запус�
 Random MAC address	Случайный MAC-адрес
 Wi-Fi and Ethernet	Wi-Fi и Ethernet
 Real MAC address	Настоящий MAC-адрес
-Restore	Вернуть
+Restore	Восстановить
 Private browser	Приватный браузер
 Separate throwaway Firefox profile (sandboxed if firejail is installed)	Отдельный временный профиль Firefox (в песочнице, если есть firejail)
 Open	Открыть
@@ -949,3 +949,24 @@ SQL injection	SQL-инъекция
 Cross-site scripting (XSS)	Межсайтовый скриптинг (XSS)
 Broken login	Взлом входа
 Network basics	Основы сетей
+Move from Windows	Переезд с Windows
+From Windows	Из Windows
+Your files are copied into “From Windows” folders; nothing here is overwritten.	Файлы копируются в папки «Из Windows»; ничего здесь не перезаписывается.
+Windows was not found on this computer.	Windows на этом компьютере не найдена.
+Windows user: {}	Пользователь Windows: {}
+Browser bookmarks (Chrome, Edge)	Закладки браузера (Chrome, Edge)
+Move	Перенести
+Copying: {}	Копирую: {}
+Everything is moved.	Всё перенесено.
+Done. Bookmarks: Firefox → Bookmarks → Manage → Import from HTML (Documents/From Windows/bookmarks.html).	Готово. Закладки: Firefox → Закладки → Управление → Импорт из HTML (Документы/Из Windows/bookmarks.html).
+System restore	Восстановление системы
+Create a snapshot now	Создать снимок сейчас
+Show snapshots	Показать снимки
+Snapshots	Снимки
+Ready. Restart now?	Готово. Перезагрузить сейчас?
+Game Bar	Игровая панель
+Screenshot	Скриншот
+Save last 30 s	Сохранить 30 с
+Instant replay	Повтор
+FPS counter	Счётчик FPS
+Clip saved	Клип сохранён

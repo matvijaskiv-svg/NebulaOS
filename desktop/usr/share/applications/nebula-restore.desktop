@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=System restore
+Name[ru]=Восстановление системы
+Name[uk]=Відновлення системи
+Name[it]=Ripristino del sistema
+Comment=Bring the system back after a bad update
+Exec=nebula-restore
+Icon=document-revert
+Categories=System;

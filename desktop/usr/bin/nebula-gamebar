@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""Game Bar (Super+G): a strip at the top of the screen while you play.
+
+Load and temperatures, volume, screenshot, "save the last 30 seconds" (instant
+replay with gpu-screen-recorder, nearly no FPS cost), Turbo and the FPS counter.
+"""
+import json
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, QIcon, app, run  # noqa: E402
+from PySide6.QtCore import Qt, QTimer  # noqa: E402
+from PySide6.QtGui import QGuiApplication  # noqa: E402
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QSlider, QVBoxLayout, QWidget  # noqa: E402
+
+RUN = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "nebulaos"
+PIDFILE = RUN / "replay.pid"
+CLIPS = Path.home() / "Videos" / "Clips"
+
+
+def sh(*cmd):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=4).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def temps():
+    """CPU and GPU temperatures from lm_sensors (°C)."""
+    try:
+        data = json.loads(sh("sensors", "-j") or "{}")
+    except ValueError:
+        return None, None
+    cpu = gpu = None
+    for chip, values in data.items():
+        for name, readings in values.items() if isinstance(values, dict) else []:
+            if not isinstance(readings, dict):
+                continue
+            t = next((v for k, v in readings.items() if k.endswith("_input")), None)
+            if t is None:
+                continue
+            if cpu is None and (chip.startswith(("k10temp", "coretemp", "zenpower")) or "Package" in name or "Tctl" in name):
+                cpu = t
+            if gpu is None and chip.startswith(("amdgpu", "nouveau", "nvidia")) and name in ("edge", "junction", "temp1"):
+                gpu = t
+    return cpu, gpu
+
+
+def replay_pid():
+    try:
+        pid = int(PIDFILE.read_text())
+        os.kill(pid, 0)
+        return pid
+    except (OSError, ValueError):
+        return None
+
+
+class GameBar(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowTitle("Game Bar")
+        card = QFrame(self)
+        card.setObjectName("gb")
+        card.setStyleSheet("QFrame#gb { background: rgba(14,14,16,0.92); border: 1px solid rgba(255,255,255,0.08);"
+                           " border-radius: 16px; } QLabel { color: #ececef; }")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(card)
+        h = QHBoxLayout(card)
+        h.setContentsMargins(18, 12, 18, 12)
+        h.setSpacing(18)
+        self.stats = QLabel()
+        f = self.stats.font()
+        f.setBold(True)
+        self.stats.setFont(f)
+        h.addWidget(self.stats)
+        vol = QSlider(Qt.Horizontal)
+        vol.setRange(0, 100)
+        m = re.search(r"([\d.]+)", sh("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"))
+        vol.setValue(int(float(m.group(1)) * 100) if m else 50)
+        vol.setFixedWidth(130)
+        vol.valueChanged.connect(lambda x: subprocess.Popen(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{x}%"]))
+        ic = QLabel()
+        ic.setPixmap(QIcon.fromTheme("audio-volume-high").pixmap(18, 18))
+        h.addWidget(ic)
+        h.addWidget(vol)
+        self.buttons = {}
+        for key, icon, label in (("shot", "camera-photo", "Screenshot"), ("clip", "media-record", "Save last 30 s"),
+                                 ("replay", "media-playback-start", "Instant replay"), ("turbo", "speedometer", "Turbo"),
+                                 ("fps", "view-statistics", "FPS counter")):
+            b = QPushButton(QIcon.fromTheme(icon), _(label))
+            b.clicked.connect(lambda _c=False, k=key: self.act(k))
+            h.addWidget(b)
+            self.buttons[key] = b
+        self.buttons["replay"].setCheckable(True)
+        self.buttons["replay"].setChecked(replay_pid() is not None)
+        self.buttons["clip"].setEnabled(replay_pid() is not None)
+        close = QPushButton("✕")
+        close.setFlat(True)
+        close.clicked.connect(self.close)
+        h.addWidget(close)
+        self._cpu = self.cpu_times()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_stats)
+        self.timer.start(1500)
+        self.update_stats()
+        self.adjustSize()
+        g = QGuiApplication.primaryScreen().geometry()
+        self.move(g.center().x() - self.width() // 2, g.top() + 18)
+
+    @staticmethod
+    def cpu_times():
+        parts = [int(x) for x in Path("/proc/stat").read_text().split("\n", 1)[0].split()[1:]]
+        return sum(parts), parts[3] + parts[4]
+
+    def update_stats(self):
+        total, idle = self.cpu_times()
+        dt, di = total - self._cpu[0], idle - self._cpu[1]
+        self._cpu = (total, idle)
+        cpu = round(100 * (1 - di / dt)) if dt else 0
+        mem = {}
+        for line in Path("/proc/meminfo").read_text().splitlines()[:3]:
+            k, v = line.split(":")
+            mem[k] = int(v.split()[0])
+        ram = round(100 * (1 - mem.get("MemAvailable", 0) / max(mem.get("MemTotal", 1), 1)))
+        ct, gt = temps()
+        parts = [f"CPU {cpu}%" + (f" · {ct:.0f}°" if ct else ""), f"RAM {ram}%"]
+        if gt:
+            parts.append(f"GPU {gt:.0f}°")
+        self.stats.setText("    ".join(parts))
+
+    def act(self, key):
+        if key == "shot":
+            self.hide()
+            QTimer.singleShot(300, lambda: (subprocess.Popen(["spectacle", "-b", "-f", "-n"]), self.close()))
+        elif key == "turbo":
+            run("perf")
+        elif key == "fps":
+            on = not (Path.home() / ".config/environment.d/90-mangohud.conf").exists()
+            run("game", "mangohud", "on" if on else "off")
+        elif key == "replay":
+            pid = replay_pid()
+            if pid:
+                os.kill(pid, signal.SIGINT)
+                PIDFILE.unlink(missing_ok=True)
+                self.buttons["clip"].setEnabled(False)
+            elif shutil.which("gpu-screen-recorder"):
+                CLIPS.mkdir(parents=True, exist_ok=True)
+                RUN.mkdir(parents=True, exist_ok=True)
+                p = subprocess.Popen(["gpu-screen-recorder", "-w", "screen", "-f", "60", "-r", "30", "-a", "default_output",
+                                      "-c", "mp4", "-o", str(CLIPS)], start_new_session=True,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                PIDFILE.write_text(str(p.pid))
+                self.buttons["clip"].setEnabled(True)
+        elif key == "clip":
+            pid = replay_pid()
+            if pid:
+                os.kill(pid, signal.SIGUSR1)
+                subprocess.Popen(["notify-send", "-a", "NebulaOS", "-i", "media-record", _("Clip saved"), str(CLIPS)])
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Escape:
+            self.close()
+
+
+def main():
+    a = app("nebula-gamebar", "input-gaming")
+    w = GameBar()
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""System restore: the Btrfs snapshots taken before and after every update (snapper),
+with "bring the system back to this moment" — applied on the next restart."""
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, Page, app, background, fit, in_terminal  # noqa: E402
+from PySide6.QtWidgets import QLabel, QMainWindow, QMessageBox  # noqa: E402
+
+
+def snapshots():
+    """[(number, date, description)] newest first — pkexec asks for the password once."""
+    out = subprocess.run(["pkexec", "snapper", "-c", "root", "--csvout", "list", "--columns", "number,date,description"],
+                         capture_output=True, text=True, timeout=120).stdout
+    rows = []
+    for line in out.splitlines()[1:]:
+        parts = line.split(",", 2)
+        if len(parts) == 3 and parts[0].strip().isdigit() and parts[0].strip() != "0":
+            rows.append((parts[0].strip(), parts[1].strip()[:16], parts[2].strip()))
+    return list(reversed(rows))
+
+
+def describe(text):
+    t = text.lower()
+    if "pacman" in t or "pre" in t or "post" in t:
+        return _("Update: {}").format(text.split(" ", 1)[-1][:70]) if text else _("Update")
+    return text or _("Snapshot")
+
+
+class Restore(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("System restore"))
+        self.rows = None
+        self.build()
+        fit(self, 820, 680)
+
+    def build(self):
+        p = Page("System restore", "NebulaOS saves the state of the system before and after every update. "
+                                   "If something broke, bring the system back. Your personal files are not touched.")
+        g = p.group()
+        g.action("Create a snapshot now", "For example before you try something risky", "Create",
+                 lambda: in_terminal("sudo", "snapper", "-c", "root", "create", "-d", "manual"))
+        s = p.group("Snapshots")
+        if self.rows is None:
+            s.action("Show snapshots", "The system asks for your password", "Show", self.load, primary=True)
+        elif not self.rows:
+            s.widget(QLabel(_("No snapshots yet. They appear after the first update.")))
+        for num, when, desc in (self.rows or [])[:40]:
+            s.action(f"{when}  ·  {describe(desc)}", f"#{num}", "Restore", lambda n=num, w=when: self.restore(n, w))
+        self.setCentralWidget(p)
+
+    def load(self):
+        background(snapshots, self.got)
+
+    def got(self, rows):
+        self.rows = rows if isinstance(rows, list) else []
+        self.build()
+
+    def restore(self, num, when):
+        if QMessageBox.question(self, _("System restore"),
+                                _("Bring the system back to {}? It takes effect after a restart; "
+                                  "your files in the home folder stay as they are.").format(when)) != QMessageBox.Yes:
+            return
+        r = subprocess.run(["pkexec", "snapper", "-c", "root", "rollback", num], capture_output=True, text=True)
+        if r.returncode != 0:
+            QMessageBox.warning(self, _("System restore"), r.stderr.strip() or _("Something went wrong."))
+            return
+        if QMessageBox.question(self, _("System restore"), _("Ready. Restart now?")) == QMessageBox.Yes:
+            subprocess.Popen(["systemctl", "reboot"])
+
+
+def main():
+    a = app("nebula-restore", "document-revert")
+    w = Restore()
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

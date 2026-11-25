@@ -843,3 +843,22 @@ Found in leaks {} times. Do not use this password.	Trovata nelle fughe {} volte.
 Not found in known leaks.	Non trovata nelle fughe note.
 Broken login	Login vulnerabile
 Network basics	Basi di rete
+Move from Windows	Trasloco da Windows
+From Windows	Da Windows
+Your files are copied into “From Windows” folders; nothing here is overwritten.	I file vengono copiati nelle cartelle “Da Windows”; qui non si sovrascrive nulla.
+Windows was not found on this computer.	Windows non è stato trovato su questo computer.
+Windows user: {}	Utente Windows: {}
+Browser bookmarks (Chrome, Edge)	Segnalibri del browser (Chrome, Edge)
+Move	Sposta
+Copying: {}	Copia: {}
+Everything is moved.	Tutto spostato.
+Done. Bookmarks: Firefox → Bookmarks → Manage → Import from HTML (Documents/From Windows/bookmarks.html).	Fatto. Segnalibri: Firefox → Segnalibri → Gestisci → Importa da HTML (Documenti/Da Windows/bookmarks.html).
+System restore	Ripristino del sistema
+Create a snapshot now	Crea un'istantanea ora
+Show snapshots	Mostra istantanee
+Snapshots	Istantanee
+Ready. Restart now?	Pronto. Riavviare ora?
+Save last 30 s	Salva 30 s
+Instant replay	Replay
+FPS counter	Contatore FPS
+Clip saved	Clip salvata

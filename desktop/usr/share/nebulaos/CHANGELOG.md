@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.9.2
+- Game Bar (Super+G) with instant replay, Move from Windows, System restore, ProtonDB ratings in Game Center, new steps in Welcome
+
 ## 0.9.1
 - Nebula Link (phone, send links), one-click Nextcloud and Pi-hole, Lessons and Password check in Toolkit
 

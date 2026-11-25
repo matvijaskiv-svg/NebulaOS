@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Game Bar
+Name[ru]=Игровая панель
+Name[uk]=Ігрова панель
+Name[it]=Game Bar
+Comment=Overlay while you play
+Exec=nebula-gamebar
+Icon=input-gaming
+Categories=Game;
+X-KDE-Shortcuts=Meta+G

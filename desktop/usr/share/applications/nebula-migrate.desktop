@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Move from Windows
+Name[ru]=Переезд с Windows
+Name[uk]=Переїзд з Windows
+Name[it]=Trasloco da Windows
+Comment=Copy your files from Windows
+Exec=nebula-migrate
+Icon=folder-windows
+Categories=System;

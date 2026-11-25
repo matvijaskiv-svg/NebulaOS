@@ -198,6 +198,9 @@ class Welcome(QWidget):
         g.switch("MangoHud in games", "Show FPS on top of games", False,
                  lambda on: run("game", "mangohud", "on" if on else "off"))
         g.action("App store", "Apps from Arch and Flathub", "Open", lambda: subprocess.Popen(["nebula-store"]))
+        g.action("Move from Windows", "Documents, pictures, wallpaper, bookmarks", "Move",
+                 lambda: subprocess.Popen(["nebula-migrate"]))
+        g.action("Nebula Link", "Connect your phone", "Connect", lambda: subprocess.Popen(["nebula-phone"]))
         lay.addWidget(g)
         lay.addStretch(1)
         return w
