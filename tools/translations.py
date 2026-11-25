@@ -1257,6 +1257,38 @@ T = {
     "Cross-site scripting (XSS)": ("Межсайтовый скриптинг (XSS)", "Міжсайтовий скриптинг (XSS)", "Cross-site scripting (XSS)"),
     "Broken login": ("Взлом входа", "Злам входу", "Login vulnerabile"),
     "Network basics": ("Основы сетей", "Основи мереж", "Basi di rete"),
+    # ---- 0.9.2 ----
+    "Move from Windows": ("Переезд с Windows", "Переїзд з Windows", "Trasloco da Windows"),
+    "From Windows": ("Из Windows", "З Windows", "Da Windows"),
+    "Your files are copied into “From Windows” folders; nothing here is overwritten.": (
+        "Файлы копируются в папки «Из Windows»; ничего здесь не перезаписывается.",
+        "Файли копіюються в теки «З Windows»; нічого тут не перезаписується.",
+        "I file vengono copiati nelle cartelle “Da Windows”; qui non si sovrascrive nulla."),
+    "Windows was not found on this computer.": ("Windows на этом компьютере не найдена.", "Windows на цьому комп'ютері не знайдено.",
+                                                "Windows non è stato trovato su questo computer."),
+    "Windows user: {}": ("Пользователь Windows: {}", "Користувач Windows: {}", "Utente Windows: {}"),
+    "Wallpaper": ("Обои", "Шпалери", "Sfondo"),
+    "Browser bookmarks (Chrome, Edge)": ("Закладки браузера (Chrome, Edge)", "Закладки браузера (Chrome, Edge)",
+                                         "Segnalibri del browser (Chrome, Edge)"),
+    "Move": ("Перенести", "Перенести", "Sposta"),
+    "Copying: {}": ("Копирую: {}", "Копіюю: {}", "Copia: {}"),
+    "Everything is moved.": ("Всё перенесено.", "Усе перенесено.", "Tutto spostato."),
+    "Done. Bookmarks: Firefox → Bookmarks → Manage → Import from HTML (Documents/From Windows/bookmarks.html).": (
+        "Готово. Закладки: Firefox → Закладки → Управление → Импорт из HTML (Документы/Из Windows/bookmarks.html).",
+        "Готово. Закладки: Firefox → Закладки → Керування → Імпорт з HTML (Документи/З Windows/bookmarks.html).",
+        "Fatto. Segnalibri: Firefox → Segnalibri → Gestisci → Importa da HTML (Documenti/Da Windows/bookmarks.html)."),
+    "System restore": ("Восстановление системы", "Відновлення системи", "Ripristino del sistema"),
+    "Create a snapshot now": ("Создать снимок сейчас", "Створити знімок зараз", "Crea un'istantanea ora"),
+    "Show snapshots": ("Показать снимки", "Показати знімки", "Mostra istantanee"),
+    "Snapshots": ("Снимки", "Знімки", "Istantanee"),
+    "Restore": ("Восстановить", "Відновити", "Ripristina"),
+    "Ready. Restart now?": ("Готово. Перезагрузить сейчас?", "Готово. Перезавантажити зараз?", "Pronto. Riavviare ora?"),
+    "Game Bar": ("Игровая панель", "Ігрова панель", "Game Bar"),
+    "Screenshot": ("Скриншот", "Знімок", "Screenshot"),
+    "Save last 30 s": ("Сохранить 30 с", "Зберегти 30 с", "Salva 30 s"),
+    "Instant replay": ("Повтор", "Повтор", "Replay"),
+    "FPS counter": ("Счётчик FPS", "Лічильник FPS", "Contatore FPS"),
+    "Clip saved": ("Клип сохранён", "Кліп збережено", "Clip salvata"),
 }
 
 OUT = Path(__file__).resolve().parent.parent / "desktop/usr/share/nebulaos/i18n"
