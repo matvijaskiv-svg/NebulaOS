@@ -622,3 +622,17 @@ Close	Закрити
 Keyboard layouts (switch with Alt+Shift):	Розкладки клавіатури (перемикання Alt+Shift):
 More layouts and options	Інші розкладки й параметри
 Layouts: %s (switch: Alt+Shift)\n	Розкладки: %s (перемикання: Alt+Shift)\n
+Popular	Популярне
+Browsers	Браузери
+Office and study	Офіс і навчання
+System tools	Системні утиліти
+Installed	Встановлені
+Installing {}…	Встановлюю {}…
+Removing {}…	Видаляю {}…
+The system may ask for your password.	Система може запитати пароль.
+Details	Докладніше
+Updating the package lists and installing {}…	Оновлюю списки пакетів і встановлюю {}…
+{} is installed.	{} встановлено.
+{} is removed.	{} видалено.
+Something went wrong.	Щось пішло не так.
+Cancelled, or no internet. Open Details to see why.	Скасовано або немає інтернету. Причина — у «Докладніше».

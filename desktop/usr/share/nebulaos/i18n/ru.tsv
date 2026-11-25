@@ -685,3 +685,17 @@ Languages	Языки
 Keyboard layouts (switch with Alt+Shift):	Раскладки клавиатуры (переключение Alt+Shift):
 More layouts and options	Другие раскладки и параметры
 Layouts: %s (switch: Alt+Shift)\n	Раскладки: %s (переключение: Alt+Shift)\n
+Popular	Популярное
+Browsers	Браузеры
+Office and study	Офис и учёба
+System tools	Системные утилиты
+Installed	Установленные
+Installing {}…	Устанавливаю {}…
+Removing {}…	Удаляю {}…
+The system may ask for your password.	Система может спросить пароль.
+Details	Подробнее
+Updating the package lists and installing {}…	Обновляю списки пакетов и устанавливаю {}…
+{} is installed.	{} установлена.
+{} is removed.	{} удалена.
+Something went wrong.	Что-то пошло не так.
+Cancelled, or no internet. Open Details to see why.	Отменено или нет интернета. Причина — в «Подробнее».

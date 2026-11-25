@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.7.4
+- Nebula Store installs apps right in the window with a progress bar; 100+ apps
+
 ## 0.7.3
 - Fixed: wallpaper and panels change again, keyboard layouts are kept, languages work, Nebula Chat reconnects, the assistant knows NebulaOS
 

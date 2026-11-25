@@ -592,3 +592,17 @@ Close	Chiudi
 Keyboard layouts (switch with Alt+Shift):	Layout di tastiera (cambia con Alt+Shift):
 More layouts and options	Altri layout e opzioni
 Layouts: %s (switch: Alt+Shift)\n	Layout: %s (cambia: Alt+Shift)\n
+Popular	Popolari
+Browsers	Browser
+Office and study	Ufficio e studio
+System tools	Strumenti di sistema
+Installed	Installate
+Installing {}…	Installazione di {}…
+Removing {}…	Rimozione di {}…
+The system may ask for your password.	Il sistema potrebbe chiedere la password.
+Details	Dettagli
+Updating the package lists and installing {}…	Aggiorno gli elenchi dei pacchetti e installo {}…
+{} is installed.	{} è installata.
+{} is removed.	{} è rimossa.
+Something went wrong.	Qualcosa è andato storto.
+Cancelled, or no internet. Open Details to see why.	Annullato o niente internet. Vedi Dettagli.

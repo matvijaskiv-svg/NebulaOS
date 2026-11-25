@@ -1,32 +1,48 @@
 #!/usr/bin/env python3
 """Nebula Store — curated apps and search across Arch and Flathub (native Qt).
 
-Installing opens a terminal: pacman/flatpak ask for confirmation themselves.
+Install and remove right in the window with a progress bar: Arch packages through
+pkexec (the system asks for your password in a normal dialog), Flathub apps per user.
 """
 import json
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/nebulaos")
-from nebula_qt import _, QIcon, app, background, fit, in_terminal  # noqa: E402
-from PySide6.QtCore import QSize, Qt  # noqa: E402
+from nebula_qt import _, QIcon, app, background, fit  # noqa: E402
+from PySide6.QtCore import QProcess, QSize, Qt  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QMainWindow, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
+    QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 CATALOG = Path("/usr/share/nebulaos/store.json")
-SECTION_ICONS = {"Games": "applications-games", "Chat and internet": "applications-internet",
-                 "Media and creativity": "applications-multimedia", "Development": "applications-development",
-                 "Security": "security-high", "Office": "applications-office"}
+FLATHUB = "https://dl.flathub.org/repo/flathub.flatpakrepo"
+SECTION_ICONS = {"Popular": "starred", "Games": "applications-games", "Chat and internet": "applications-internet",
+                 "Browsers": "internet-web-browser", "Media and creativity": "applications-multimedia",
+                 "Development": "applications-development", "Office and study": "applications-office",
+                 "Security": "security-high", "System tools": "applications-system"}
+PERCENT = re.compile(r"(\d{1,3})%")
 
 
 def installed_pacman():
     try:
         return set(subprocess.run(["pacman", "-Qq"], capture_output=True, text=True).stdout.split())
     except OSError:
+        return set()
+
+
+def installed_flatpak():
+    if not shutil.which("flatpak"):
+        return set()
+    try:
+        out = subprocess.run(["flatpak", "list", "--app", "--columns=application"],
+                             capture_output=True, text=True, timeout=20).stdout
+        return set(out.split())
+    except (OSError, subprocess.TimeoutExpired):
         return set()
 
 
@@ -39,8 +55,7 @@ def search(query):
             head = lines[i].split()
             if head:
                 name = head[0].split("/", 1)[-1]
-                out.append({"source": "arch", "id": name, "name": name, "desc": lines[i + 1].strip(),
-                            "installed": "[installed]" in lines[i]})
+                out.append({"source": "arch", "id": name, "name": name, "desc": lines[i + 1].strip()})
     except (OSError, subprocess.TimeoutExpired):
         pass
     out = out[:48]
@@ -51,16 +66,134 @@ def search(query):
             for line in p.stdout.splitlines():
                 parts = line.split("\t")
                 if len(parts) >= 3 and "." in parts[0]:
-                    out.append({"source": "flathub", "id": parts[0], "name": parts[1], "desc": parts[2],
-                                "installed": False})
+                    out.append({"source": "flathub", "id": parts[0], "name": parts[1], "desc": parts[2]})
         except (OSError, subprocess.TimeoutExpired):
             pass
     return out[:80]
 
 
+def steps(item, remove):
+    """Commands for one install/remove, run one after another."""
+    pid = item["id"]
+    if item["source"] == "arch":
+        if remove:
+            return [["pkexec", "pacman", "-Rns", "--noconfirm", pid]]
+        return [["pkexec", "pacman", "-S", "--needed", "--noconfirm", pid]]
+    if remove:
+        return [["flatpak", "uninstall", "--user", "-y", "--noninteractive", pid]]
+    return [["flatpak", "remote-add", "--user", "--if-not-exists", "flathub", FLATHUB],
+            ["flatpak", "install", "--user", "-y", "--noninteractive", "flathub", pid]]
+
+
+def launch(item):
+    """Open an installed app."""
+    if item["source"] == "flathub":
+        subprocess.Popen(["flatpak", "run", item["id"]])
+        return
+    try:
+        files = subprocess.run(["pacman", "-Qlq", item["id"]], capture_output=True, text=True).stdout.split()
+    except OSError:
+        files = []
+    desktop = [f for f in files if f.startswith("/usr/share/applications/") and f.endswith(".desktop")]
+    if desktop:
+        subprocess.Popen(["kioclient", "exec", desktop[0]])
+    elif shutil.which(item["id"]):
+        subprocess.Popen(["konsole", "--profile", "Nebula", "-e", item["id"]])
+
+
+class Progress(QDialog):
+    """Runs the steps with a progress bar; the details are one click away."""
+
+    def __init__(self, parent, item, remove):
+        super().__init__(parent)
+        self.item, self.remove, self.ok = item, remove, False
+        self.queue = steps(item, remove)
+        self.retried = False
+        self.setWindowTitle(item["name"])
+        self.setMinimumWidth(460)
+        v = QVBoxLayout(self)
+        self.label = QLabel((_("Removing {}…") if remove else _("Installing {}…")).format(item["name"]))
+        f = self.label.font()
+        f.setBold(True)
+        self.label.setFont(f)
+        v.addWidget(self.label)
+        self.bar = QProgressBar()
+        self.bar.setRange(0, 0)
+        v.addWidget(self.bar)
+        self.hint = QLabel(_("The system may ask for your password.") if item["source"] == "arch" else "")
+        self.hint.setStyleSheet("color: palette(placeholder-text);")
+        v.addWidget(self.hint)
+        self.log = QPlainTextEdit()
+        self.log.setReadOnly(True)
+        self.log.setMaximumBlockCount(400)
+        self.log.setFixedHeight(150)
+        self.log.hide()
+        details = QPushButton(_("Details"))
+        details.setFlat(True)
+        details.clicked.connect(lambda: self.log.setVisible(not self.log.isVisible()))
+        self.close_btn = QPushButton(_("Close"))
+        self.close_btn.setEnabled(False)
+        self.close_btn.clicked.connect(self.accept)
+        row = QHBoxLayout()
+        row.addWidget(details)
+        row.addStretch(1)
+        row.addWidget(self.close_btn)
+        v.addWidget(self.log)
+        v.addLayout(row)
+        self.proc = QProcess(self)
+        self.proc.setProcessChannelMode(QProcess.MergedChannels)
+        self.proc.readyReadStandardOutput.connect(self.read)
+        self.proc.finished.connect(self.step_done)
+        self.next_step()
+
+    def next_step(self):
+        cmd = self.queue.pop(0)
+        self.log.appendPlainText("$ " + " ".join(cmd))
+        self.proc.start(cmd[0], cmd[1:])
+
+    def read(self):
+        text = bytes(self.proc.readAllStandardOutput()).decode(errors="replace")
+        self.log.appendPlainText(text.rstrip())
+        found = PERCENT.findall(text)
+        if found:
+            self.bar.setRange(0, 100)
+            self.bar.setValue(min(100, int(found[-1])))
+
+    def step_done(self, code, _status):
+        log = self.log.toPlainText()
+        if code != 0 and self.item["source"] == "arch" and not self.remove and not self.retried \
+                and ("404" in log or "target not found" in log or "failed retrieving" in log):
+            # Package lists are old: update the system together with the app (the Arch way).
+            self.retried = True
+            self.label.setText(_("Updating the package lists and installing {}…").format(self.item["name"]))
+            self.queue = [["pkexec", "pacman", "-Syu", "--needed", "--noconfirm", self.item["id"]]]
+            self.next_step()
+            return
+        if code == 0 and self.queue:
+            self.next_step()
+            return
+        self.ok = code == 0
+        self.bar.setRange(0, 100)
+        self.bar.setValue(100 if self.ok else 0)
+        if self.ok:
+            self.label.setText((_("{} is removed.") if self.remove else _("{} is installed.")).format(self.item["name"]))
+            self.hint.setText("")
+        else:
+            self.label.setText(_("Something went wrong."))
+            self.hint.setText(_("Cancelled, or no internet. Open Details to see why."))
+            self.log.show()
+        self.close_btn.setEnabled(True)
+        self.close_btn.setDefault(True)
+
+    def reject(self):
+        if self.proc.state() == QProcess.NotRunning:
+            super().reject()
+
+
 class AppCard(QFrame):
-    def __init__(self, item):
+    def __init__(self, store, item):
         super().__init__()
+        self.store, self.item = store, item
         self.setObjectName("group")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(12, 10, 12, 10)
@@ -86,16 +219,39 @@ class AppCard(QFrame):
         text.addWidget(desc)
         text.addWidget(src)
         lay.addLayout(text, 1)
-        if item.get("installed"):
-            btn = QPushButton(_("Remove"))
-            cmd = ("sudo", "pacman", "-Rns", item["id"]) if item["source"] == "arch" else ("flatpak", "uninstall", item["id"])
+        self.buttons = QVBoxLayout()
+        lay.addLayout(self.buttons)
+        self.draw_buttons()
+
+    def draw_buttons(self):
+        while self.buttons.count():
+            w = self.buttons.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        if self.store.is_installed(self.item):
+            open_btn = QPushButton(_("Open"))
+            open_btn.setDefault(True)
+            open_btn.clicked.connect(lambda: launch(self.item))
+            rm = QPushButton(_("Remove"))
+            rm.setFlat(True)
+            rm.clicked.connect(lambda: self.run(remove=True))
+            self.buttons.addWidget(open_btn)
+            self.buttons.addWidget(rm)
         else:
             btn = QPushButton(_("Install"))
             btn.setDefault(True)
-            cmd = ("sudo", "pacman", "-S", "--needed", item["id"]) if item["source"] == "arch" \
-                else ("flatpak", "install", "flathub", item["id"])
-        btn.clicked.connect(lambda: in_terminal(*cmd))
-        lay.addWidget(btn, 0, Qt.AlignVCenter)
+            btn.clicked.connect(lambda: self.run(remove=False))
+            self.buttons.addWidget(btn)
+
+    def run(self, remove):
+        if remove and QMessageBox.question(self, "Nebula Store",
+                                           _("Remove {}?").format(self.item["name"])) != QMessageBox.Yes:
+            return
+        dlg = Progress(self, self.item, remove)
+        dlg.exec()
+        if dlg.ok:
+            self.store.refresh_installed()
+            self.draw_buttons()
 
 
 class Store(QMainWindow):
@@ -106,13 +262,15 @@ class Store(QMainWindow):
             self.catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             self.catalog = {}
-        self.have = installed_pacman()
+        self.refresh_installed()
 
         self.nav = QListWidget()
         self.nav.setObjectName("nav")
-        self.nav.setFixedWidth(200)
+        self.nav.setFixedWidth(210)
         for section in self.catalog:
-            self.nav.addItem(QListWidgetItem(QIcon.fromTheme(SECTION_ICONS.get(section, "applications-other")), _(section)))
+            self.nav.addItem(QListWidgetItem(QIcon.fromTheme(SECTION_ICONS.get(section, "applications-other")),
+                                             _(section)))
+        self.nav.addItem(QListWidgetItem(QIcon.fromTheme("checkmark", QIcon.fromTheme("dialog-ok")), _("Installed")))
         self.nav.currentRowChanged.connect(self.show_section)
 
         self.search = QLineEdit()
@@ -158,7 +316,14 @@ class Store(QMainWindow):
         lay.addWidget(right, 1)
         self.setCentralWidget(body)
         self.nav.setCurrentRow(0)
-        fit(self, 960, 680)
+        fit(self, 1000, 700)
+
+    def refresh_installed(self):
+        self.have_arch = installed_pacman()
+        self.have_flat = installed_flatpak()
+
+    def is_installed(self, item):
+        return item["id"] in (self.have_arch if item["source"] == "arch" else self.have_flat)
 
     def fill(self, items):
         while self.grid.count():
@@ -168,14 +333,24 @@ class Store(QMainWindow):
         if not items:
             self.grid.addWidget(QLabel(_("Nothing found")), 0, 0)
         for i, item in enumerate(items):
-            self.grid.addWidget(AppCard(item), i // 2, i % 2)
+            self.grid.addWidget(AppCard(self, item), i // 2, i % 2)
 
     def show_section(self, row):
         if row < 0:
             return
-        section = list(self.catalog)[row]
-        self.title.setText(_(section))
-        self.fill([dict(a, installed=a["source"] == "arch" and a["id"] in self.have) for a in self.catalog[section]])
+        sections = list(self.catalog)
+        if row >= len(sections):
+            self.title.setText(_("Installed"))
+            seen, items = set(), []
+            for apps in self.catalog.values():
+                for a in apps:
+                    if a["id"] not in seen and self.is_installed(a):
+                        seen.add(a["id"])
+                        items.append(a)
+            self.fill(items)
+            return
+        self.title.setText(_(sections[row]))
+        self.fill(self.catalog[sections[row]])
 
     def on_search(self):
         query = self.search.text().strip()
