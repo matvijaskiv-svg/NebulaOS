@@ -14,7 +14,7 @@ nebulascreentimeEnabled=true
 blurEnabled=true
 contrastEnabled=true
 slidingpopupsEnabled=true
-wobblywindowsEnabled=false
+wobblywindowsEnabled=true
 magiclampEnabled=true
 squashEnabled=false
 scaleEnabled=true
@@ -27,3 +27,9 @@ BorderActivate=7
 
 [NightColor]
 Active=false
+
+[Effect-wobblywindows]
+Wobbliness=78
+Stiffness=10
+Drag=85
+MoveFactor=10

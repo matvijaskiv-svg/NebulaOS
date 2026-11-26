@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.9.3
+- Game Bar can be dragged and made transparent; jelly windows when moving; drop files and apps on the desktop, Add to desktop in the right-click menu
+
 ## 0.9.2
 - Game Bar (Super+G) with instant replay, Move from Windows, System restore, ProtonDB ratings in Game Center, new steps in Welcome
 

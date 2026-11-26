@@ -19,5 +19,5 @@ desktopWidgets([["org.kde.plasma.systemmonitor.cpu", 200], ["org.kde.plasma.syst
 
 // Lock the layout again: users cannot edit panels (NebulaOS can, through scripting).
 panels().forEach(function (p) { safe(function () { p.locked = true; }); });
-desktops().forEach(function (d) { safe(function () { d.locked = true; }); });
-safe(function () { locked = true; });
+// The desktop stays open: drop files and apps onto it freely.
+desktops().forEach(function (d) { safe(function () { d.locked = false; }); });

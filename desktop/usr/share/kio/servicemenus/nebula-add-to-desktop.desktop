@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Service
+MimeType=all/all;
+Actions=addToDesktop
+X-KDE-Priority=TopLevel
+
+[Desktop Action addToDesktop]
+Name=Add to desktop
+Name[ru]=Добавить на рабочий стол
+Name[uk]=Додати на робочий стіл
+Name[it]=Aggiungi alla scrivania
+Icon=user-desktop
+Exec=sh -c 'd="$(xdg-user-dir DESKTOP)"; for f in "$@"; do ln -s "$f" "$d/" 2>/dev/null; done' _ %F

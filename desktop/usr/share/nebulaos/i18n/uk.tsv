@@ -48,7 +48,7 @@ Checking…	Перевіряю…
 System is up to date	Система оновлена
 Update the system	Оновити систему
 NebulaOS and all apps; snapshots are taken before and after	NebulaOS і всі програми; до і після створюються знімки
-Update	Оновити
+Update	Оновлення
 What is new	Що нового
 Installed: NebulaOS {}	Встановлено NebulaOS {}
 Mode features	Функції режимів
@@ -907,3 +907,13 @@ Save last 30 s	Зберегти 30 с
 Instant replay	Повтор
 FPS counter	Лічильник FPS
 Clip saved	Кліп збережено
+Transparency	Прозорість
+NebulaOS saves the state of the system before and after every update. If something broke, bring the system back. Your personal files are not touched.	NebulaOS зберігає стан системи до і після кожного оновлення. Якщо щось зламалося — поверніть систему назад. Особисті файли не зачіпаються.
+For example before you try something risky	Наприклад, перед чимось ризикованим
+The system asks for your password	Система запитає ваш пароль
+No snapshots yet. They appear after the first update.	Знімків поки немає. Вони з'являться після першого оновлення.
+Bring the system back to {}? It takes effect after a restart; your files in the home folder stay as they are.	Повернути систему до {}? Спрацює після перезавантаження; файли в домашній теці залишаться як є.
+Update: {}	Оновлення: {}
+Snapshot	Знімок
+Searching for Windows…	Шукаю Windows…
+Add to desktop	Додати на робочий стіл

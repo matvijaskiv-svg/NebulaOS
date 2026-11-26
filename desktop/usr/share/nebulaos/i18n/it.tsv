@@ -41,7 +41,7 @@ Checking…	Controllo…
 System is up to date	Il sistema è aggiornato
 Update the system	Aggiorna il sistema
 NebulaOS and all apps; snapshots are taken before and after	NebulaOS e tutte le app; snapshot prima e dopo
-Update	Aggiorna
+Update	Aggiornamento
 What is new	Novità
 Installed: NebulaOS {}	Installato: NebulaOS {}
 Mode features	Funzioni delle modalità
@@ -862,3 +862,13 @@ Save last 30 s	Salva 30 s
 Instant replay	Replay
 FPS counter	Contatore FPS
 Clip saved	Clip salvata
+Transparency	Trasparenza
+NebulaOS saves the state of the system before and after every update. If something broke, bring the system back. Your personal files are not touched.	NebulaOS salva lo stato del sistema prima e dopo ogni aggiornamento. Se qualcosa si rompe, torna indietro. I tuoi file non vengono toccati.
+For example before you try something risky	Ad esempio prima di qualcosa di rischioso
+The system asks for your password	Il sistema chiederà la password
+No snapshots yet. They appear after the first update.	Ancora nessuna istantanea. Appariranno dopo il primo aggiornamento.
+Bring the system back to {}? It takes effect after a restart; your files in the home folder stay as they are.	Riportare il sistema a {}? Avrà effetto dopo il riavvio; i file nella home restano come sono.
+Update: {}	Aggiornamento: {}
+Snapshot	Istantanea
+Searching for Windows…	Cerco Windows…
+Add to desktop	Aggiungi alla scrivania
