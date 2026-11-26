@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.9.4
+- Server services install themselves (Docker, SSH, Cockpit, nginx, PostgreSQL); Assistant: 10 models with recommendation and download progress; panels locked again
+
 ## 0.9.3
 - Game Bar can be dragged and made transparent; jelly windows when moving; drop files and apps on the desktop, Add to desktop in the right-click menu
 

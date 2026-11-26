@@ -19,10 +19,10 @@ from nebula_i18n import LANGUAGES, current  # noqa: E402
 from nebula_qt import (  # noqa: E402
     _, Meter, Page, Thumb, app, background, fit, in_terminal, run, run_cmd, tile,
 )
-from PySide6.QtCore import QSize, Qt  # noqa: E402
+from PySide6.QtCore import QProcess, QSize, Qt  # noqa: E402
 from PySide6.QtGui import QFont, QPixmap  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QDialog, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QProgressBar,
     QListWidgetItem, QMainWindow, QPlainTextEdit, QPushButton, QSlider, QStackedWidget, QStatusBar,
     QVBoxLayout, QWidget,
 )
@@ -90,6 +90,48 @@ def wallpapers():
     found += sorted((SHARE / "wallpapers").glob("*.png")) if (SHARE / "wallpapers").exists() else []
     return [p for p in found if p.exists()]
 
+
+
+class PullDialog(QDialog):
+    """Downloads an AI model with a progress bar (ollama pull)."""
+
+    def __init__(self, parent, model):
+        super().__init__(parent)
+        self.ok = False
+        self.setWindowTitle(model)
+        self.setMinimumWidth(440)
+        v = QVBoxLayout(self)
+        self.label = QLabel(_("Downloading {}…").format(model))
+        v.addWidget(self.label)
+        self.bar = QProgressBar()
+        self.bar.setRange(0, 0)
+        v.addWidget(self.bar)
+        self.close_btn = QPushButton(_("Close"))
+        self.close_btn.setEnabled(False)
+        self.close_btn.clicked.connect(self.accept)
+        v.addWidget(self.close_btn, 0, Qt.AlignRight)
+        self.proc = QProcess(self)
+        self.proc.setProcessChannelMode(QProcess.MergedChannels)
+        self.proc.readyReadStandardOutput.connect(self.read)
+        self.proc.finished.connect(self.done)
+        self.proc.start("ollama", ["pull", model])
+
+    def read(self):
+        found = re.findall(r"(\d{1,3})%", bytes(self.proc.readAllStandardOutput()).decode(errors="replace"))
+        if found:
+            self.bar.setRange(0, 100)
+            self.bar.setValue(int(found[-1]))
+
+    def done(self, code, _status):
+        self.ok = code == 0
+        self.bar.setRange(0, 100)
+        self.bar.setValue(100 if self.ok else 0)
+        self.label.setText(_("Ready.") if self.ok else _("Download failed. Is the AI service running and is there internet?"))
+        self.close_btn.setEnabled(True)
+
+    def reject(self):
+        if self.proc.state() == QProcess.NotRunning:
+            super().reject()
 
 class Settings(QMainWindow):
     def __init__(self):
@@ -672,8 +714,8 @@ class Settings(QMainWindow):
         return p
 
     def page_ai(self):
-        p = Page("Assistant", "Runs on this computer, offline. Super+A.")
-        g = p.group()
+        p = Page("Assistant", "Runs on this computer, offline. Super+A. Bigger models answer much better "
+                              "but need more memory and disk space.")
         conf = CONF / "assistant.conf"
         model_now = ""
         for f in (Path("/etc/nebulaos/assistant.conf"), conf):
@@ -681,22 +723,82 @@ class Settings(QMainWindow):
                 for line in f.read_text(encoding="utf-8").splitlines():
                     if line.startswith("model=") and line[6:].strip():
                         model_now = line[6:].strip()
-        models = ["qwen2.5:1.5b", "qwen2.5:3b", "qwen2.5:7b", "llama3.2:3b"]
-        if model_now and model_now not in models:
-            models.insert(0, model_now)
+        try:
+            ram_gb = int(Path("/proc/meminfo").read_text().split()[1]) / 2**20
+        except (OSError, ValueError, IndexError):
+            ram_gb = 8
+        catalog = [  # (model, size GB, RAM GB needed, description)
+            ("qwen2.5:1.5b", 1.0, 4, "Very fast, basic answers"),
+            ("llama3.2:3b", 2.0, 6, "Fast, good for everyday questions"),
+            ("qwen2.5:3b", 1.9, 6, "Fast, understands Russian and Ukrainian well"),
+            ("gemma3:4b", 3.3, 8, "Balanced, good at explaining"),
+            ("qwen2.5:7b", 4.7, 10, "Smart, best balance for most laptops"),
+            ("qwen2.5-coder:7b", 4.7, 10, "Best for code and terminal commands"),
+            ("llama3.1:8b", 4.9, 12, "Smart, strong in English"),
+            ("deepseek-r1:8b", 5.2, 12, "Thinks step by step before answering"),
+            ("gemma3:12b", 8.1, 16, "Very smart, needs a strong computer"),
+            ("qwen2.5:14b", 9.0, 20, "The smartest here, needs 16+ GB of memory"),
+        ]
+        fitting = [m for m, _s, need, _d in catalog if need <= ram_gb]
+        recommended = fitting[-1] if fitting else catalog[0][0]
+        installed = set()
+        try:
+            out = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=10).stdout
+            installed = {line.split()[0] for line in out.splitlines()[1:] if line.strip()}
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        svc = p.group()
+        running = subprocess.run(["systemctl", "is-active", "--quiet", "ollama"]).returncode == 0
+        svc.action("AI service", _("Running") if running else _("Stopped"), "Open the assistant" if running else "Start",
+                   (lambda: subprocess.Popen(["nebula-ai-overlay"])) if running else
+                   (lambda: (in_terminal("sudo", "systemctl", "enable", "--now", "ollama"))), primary=True)
+        g = p.group("Models", _("This computer has {} GB of memory.").format(round(ram_gb)))
 
-        def choose(i):
+        def use(model):
             CONF.mkdir(parents=True, exist_ok=True)
             lines = [l for l in conf.read_text(encoding="utf-8").splitlines() if not l.startswith("model=")] \
                 if conf.exists() else []
-            conf.write_text("\n".join(lines + [f"model={models[i]}"]) + "\n", encoding="utf-8")
-            self.toast(_("Model: {}").format(models[i]))
-        g.combo("Model", models, models.index(model_now) if model_now in models else 0, choose,
-                "Bigger models answer better but need more memory")
-        g.action("Download a model", "Downloaded with ollama pull (several GB)", "Download",
-                 lambda: in_terminal("ollama", "pull", model_now or models[0]))
-        g.action("Open the assistant", "", "Open", lambda: subprocess.Popen(["nebula-ai-overlay"]), primary=True)
+            conf.write_text("\n".join(lines + [f"model={model}"]) + "\n", encoding="utf-8")
+            self.toast(_("Model: {}").format(model))
+            self.refresh_page()
+
+        def download(model):
+            dlg = PullDialog(self, model)
+            dlg.exec()
+            if dlg.ok:
+                use(model)
+
+        def remove(model):
+            subprocess.run(["ollama", "rm", model], capture_output=True)
+            self.refresh_page()
+
+        for model, size, need, desc in catalog:
+            tags = []
+            if model == model_now:
+                tags.append("✓ " + _("in use"))
+            if model == recommended:
+                tags.append("★ " + _("recommended for this computer"))
+            if need > ram_gb:
+                tags.append("⚠ " + _("needs {} GB of memory").format(need))
+            sub = f"{_(desc)} · {size:.1f} GB" + ("   ·   " + "  ·  ".join(tags) if tags else "")
+            name = model.replace(":", " ").title()
+            if model in installed or f"{model}:latest" in installed:
+                if model == model_now:
+                    g.action(name, sub, "Remove", lambda m=model: remove(m))
+                else:
+                    g.action(name, sub, "Use", lambda m=model: use(m), primary=model == recommended)
+            else:
+                g.action(name, sub, "Download", lambda m=model: download(m), primary=model == recommended)
         return p
+
+    def refresh_page(self):
+        """Rebuild the current page (after a model was downloaded, chosen or removed)."""
+        idx = self.stack.currentIndex()
+        old = self.stack.widget(idx)
+        self.stack.insertWidget(idx, self.page_ai())
+        self.stack.removeWidget(old)
+        old.deleteLater()
+        self.stack.setCurrentIndex(idx)
 
     def page_about(self):
         p = Page("About this system")

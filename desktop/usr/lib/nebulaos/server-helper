@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# NebulaOS server helper, run as root through pkexec by the Server Panel.
+#   server-helper deploy <template> <user> [--accept-eula]   install Docker if needed, start a ready-made server
+#   server-helper start|stop|remove <template>
+#   server-helper service-on <ssh|docker|cockpit|web|db> <user>
+#   server-helper service-off <ssh|docker|cockpit|web|db>
+# Prints "STEP: <text>" lines the panel shows as progress.
+set -euo pipefail
+SHARE=/usr/share/nebulaos/templates
+declare -A UNIT=([ssh]=sshd.service [docker]=docker.service [cockpit]=cockpit.socket [web]=nginx.service [db]=postgresql.service)
+declare -A PKG=([ssh]=openssh [docker]='docker docker-compose docker-buildx' [cockpit]='cockpit cockpit-podman cockpit-storaged' [web]=nginx [db]=postgresql)
+declare -A PORT=([ssh]=22/tcp [cockpit]=9090/tcp [web]='80/tcp 443/tcp')
+step() { printf 'STEP: %s\n' "$*"; }
+valid() { [[ $1 =~ ^[a-z0-9-]+$ ]]; }
+
+install_pkgs() {
+  local missing=() p
+  for p in "$@"; do pacman -Q "$p" >/dev/null 2>&1 || missing+=("$p"); done
+  (( ${#missing[@]} )) || return 0
+  step "Installing ${missing[*]}"
+  pacman -S --needed --noconfirm "${missing[@]}"
+}
+
+open_ports() { command -v ufw >/dev/null || return 0; local p; for p in "$@"; do ufw allow "$p" >/dev/null 2>&1 || true; done; }
+
+ensure_docker() {
+  install_pkgs docker docker-compose docker-buildx
+  step "Starting Docker"
+  systemctl enable --now docker.service >/dev/null
+  [[ -n ${1:-} ]] && id "$1" >/dev/null 2>&1 && usermod -aG docker "$1" || true
+}
+
+cmd=${1:-}; name=${2:-}
+case $cmd in
+  deploy)
+    valid "$name" && [[ -f $SHARE/$name/compose.yaml ]] || { echo "unknown template: $name" >&2; exit 2; }
+    ensure_docker "${3:-}"
+    dir=/srv/nebula/$name
+    install -d "$dir"
+    cp -n "$SHARE/$name/compose.yaml" "$dir/"
+    [[ ${4:-} == --accept-eula ]] && sed -i 's/EULA: "FALSE"/EULA: "TRUE"/' "$dir/compose.yaml"
+    step "Downloading the server (a few minutes the first time)"
+    (cd "$dir" && docker compose pull 2>&1 | tr '\r' '\n')
+    step "Starting"
+    (cd "$dir" && docker compose up -d)
+    [[ -f $SHARE/$name/ports ]] && mapfile -t ports < "$SHARE/$name/ports" && open_ports "${ports[@]}"
+    step "Done" ;;
+  start|stop)
+    valid "$name" && [[ -f /srv/nebula/$name/compose.yaml ]] || exit 2
+    step "$cmd"
+    (cd "/srv/nebula/$name" && if [[ $cmd == start ]]; then docker compose up -d; else docker compose stop; fi) ;;
+  remove)
+    valid "$name" && [[ -f /srv/nebula/$name/compose.yaml ]] || exit 2
+    step "Removing"
+    (cd "/srv/nebula/$name" && docker compose down)
+    rm -f "/srv/nebula/$name/compose.yaml"
+    step "Done (data kept in /srv/nebula/$name)" ;;
+  service-on)
+    [[ -n ${UNIT[$name]:-} ]] || exit 2
+    install_pkgs ${PKG[$name]}
+    if [[ $name == db && ! -d /var/lib/postgres/data/base ]]; then
+      step "Preparing the database"; sudo -iu postgres initdb -D /var/lib/postgres/data >/dev/null
+    fi
+    [[ $name == docker ]] && ensure_docker "${3:-}"
+    step "Starting ${UNIT[$name]}"
+    systemctl enable --now "${UNIT[$name]}"
+    [[ -n ${PORT[$name]:-} ]] && open_ports ${PORT[$name]}
+    step "Done" ;;
+  service-off)
+    [[ -n ${UNIT[$name]:-} ]] || exit 2
+    step "Stopping ${UNIT[$name]}"
+    systemctl disable --now "${UNIT[$name]}"
+    step "Done" ;;
+  *) echo "usage: server-helper deploy|start|stop|remove <template> | service-on|service-off <service>" >&2; exit 2 ;;
+esac

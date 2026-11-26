@@ -917,3 +917,27 @@ Update: {}	Оновлення: {}
 Snapshot	Знімок
 Searching for Windows…	Шукаю Windows…
 Add to desktop	Додати на робочий стіл
+Runs on this computer, offline. Super+A. Bigger models answer much better but need more memory and disk space.	Працює на цьому комп'ютері, без інтернету. Super+A. Більші моделі відповідають набагато краще, але їм потрібно більше пам'яті й місця.
+AI service	Служба ШІ
+Running	Працює
+Stopped	Зупинено
+Models	Моделі
+This computer has {} GB of memory.	У цьому комп'ютері {} ГБ пам'яті.
+in use	використовується
+recommended for this computer	рекомендуємо для цього комп'ютера
+needs {} GB of memory	потрібно {} ГБ пам'яті
+Very fast, basic answers	Дуже швидка, прості відповіді
+Fast, good for everyday questions	Швидка, для щоденних питань
+Fast, understands Russian and Ukrainian well	Швидка, добре розуміє російську й українську
+Balanced, good at explaining	Збалансована, добре пояснює
+Smart, best balance for most laptops	Розумна, найкращий баланс для більшості ноутбуків
+Best for code and terminal commands	Найкраща для коду й команд термінала
+Smart, strong in English	Розумна, сильна в англійській
+Thinks step by step before answering	Думає крок за кроком перед відповіддю
+Very smart, needs a strong computer	Дуже розумна, потрібен потужний комп'ютер
+The smartest here, needs 16+ GB of memory	Найрозумніша тут, потрібно 16+ ГБ пам'яті
+Downloading {}…	Завантажую {}…
+Ready.	Готово.
+Download failed. Is the AI service running and is there internet?	Не вдалося завантажити. Чи працює служба ШІ і чи є інтернет?
+Installing: %s\n	Встановлюю: %s\n
+You can use docker without sudo after you log in again.\n	Docker можна буде використовувати без sudo після повторного входу.\n

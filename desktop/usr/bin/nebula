@@ -234,7 +234,11 @@ cmd_perf() {
 VERSION_FILE=$SHARE/VERSION
 version() { cat "$VERSION_FILE" 2>/dev/null || echo dev; }
 hold() { printf "$(t '\nPress Enter to close…')"; read -r _ || true; }
-need() { command -v "$1" >/dev/null || die "missing command $1 (package ${2:-$1})"; }
+need() {
+  command -v "$1" >/dev/null && return 0
+  [[ $1 == docker ]] && { cmd_server enable docker; return 0; }
+  die "missing command $1 (package ${2:-$1})"
+}
 
 # ---------- Updates ----------
 ensure_repo() {
@@ -367,6 +371,7 @@ cmd_privacy() {
 # ---------- Server ----------
 declare -A SRV_UNIT=([ssh]=sshd.service [docker]=docker.service [cockpit]=cockpit.socket [web]=nginx.service [db]=postgresql.service)
 declare -A SRV_PORT=([ssh]=22/tcp [cockpit]=9090/tcp [web]='80/tcp 443/tcp')
+declare -A SRV_PKG=([ssh]=openssh [docker]='docker docker-compose docker-buildx' [cockpit]='cockpit cockpit-podman cockpit-storaged' [web]=nginx [db]=postgresql)
 cmd_server() {
   case ${1:-status} in
     status)
@@ -378,6 +383,14 @@ cmd_server() {
       printf '  %-8s %s\n' firewall "$(sudo -n ufw status 2>/dev/null | head -1 || echo "$(t 'ufw: needs sudo')")" ;;
     enable)
       local k=${2:-}; [[ -n ${SRV_UNIT[$k]:-} ]] || die "enable: ${!SRV_UNIT[*]}"
+      # Install what is missing first (one password prompt), then start it.
+      local missing=() pkg
+      for pkg in ${SRV_PKG[$k]}; do pacman -Q "$pkg" >/dev/null 2>&1 || missing+=("$pkg"); done
+      if (( ${#missing[@]} )); then
+        printf "$(t 'Installing: %s\n')" "${missing[*]}"
+        sudo pacman -S --needed --noconfirm "${missing[@]}" || die "$(t 'could not install, check the internet connection')"
+      fi
+      [[ $k == docker ]] && sudo usermod -aG docker "$USER" && printf "$(t 'You can use docker without sudo after you log in again.\n')"
       if [[ $k == db && ! -d /var/lib/postgres/data/base ]]; then
         sudo -iu postgres initdb -D /var/lib/postgres/data
       fi
