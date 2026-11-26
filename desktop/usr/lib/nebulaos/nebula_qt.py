@@ -39,12 +39,105 @@ def app(desktop_id, icon="nebulaos"):
     a.setWindowIcon(QIcon.fromTheme(icon))
     a.setApplicationDisplayName("")
     a.setStyleSheet(STYLE)
+    _mode_shapes()
     return a
 
 
-# Look of NebulaOS apps. Colors come from the mode's palette; shapes depend on the mode:
-# Hacking — macOS (soft corners, pill buttons), Gaming — Garuda neon (accent outlines,
-# gradient selection), Server — Ubuntu Yaru (small corners, solid orange accents).
+def radius(px):
+    """Corner radius in the mode's shape: Steam is square, Ubuntu small, macOS soft."""
+    return {"gaming": min(px, 2), "server": min(px, 6)}.get(MODE, px)
+
+
+def _mode_shapes():
+    """Every app's own style sheets get the mode's corner radius, so no app keeps a foreign shape."""
+    import re
+    from PySide6.QtWidgets import QWidget
+    if getattr(QWidget, "_nebula_shaped", False) or MODE == "hacking":
+        return
+    orig = QWidget.setStyleSheet
+    pat = re.compile(r"border-radius:\s*(\d+)px")
+
+    def shaped(self, sheet):
+        orig(self, pat.sub(lambda m: f"border-radius: {radius(int(m.group(1)))}px", sheet or ""))
+    QWidget.setStyleSheet = shaped
+    QWidget._nebula_shaped = True
+
+
+# Look of NebulaOS apps — each mode imitates a real program family, not a template:
+#   Gaming  — Steam client: square corners, uppercase headers, accent bar on the selected item.
+#   Hacking — macOS Finder: grey sidebar, soft grey selection, plain lists with thin dividers.
+#   Server  — Ubuntu Settings (Yaru): framed lists, small radius, orange only on the main button.
+_COMMON = """
+QScrollBar:vertical {{ width: 8px; background: transparent; margin: 2px; }}
+QScrollBar::handle:vertical {{ background: palette(midlight); border-radius: 3px; min-height: 30px; }}
+QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+QStatusBar {{ border: none; }}
+QScrollArea {{ background: transparent; }}
+QPushButton:disabled {{ color: palette(placeholder-text); }}
+QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus {{ border: 1px solid palette(highlight); }}
+QProgressBar::chunk {{ background: palette(highlight); }}
+"""
+
+_STYLES = {
+    "gaming": """
+QFrame#group {{ background: palette(base); border: none; border-radius: 2px; }}
+QFrame#card {{ background: palette(base); border: none; border-radius: 2px; }}
+QFrame#card[active="true"] {{ border: 1px solid palette(highlight); }}
+QLabel#badge {{ color: palette(highlighted-text); background: palette(highlight); border-radius: 2px; padding: 1px 6px; }}
+QLabel#pagetitle {{ letter-spacing: 1px; }}
+QLabel#grouptitle {{ color: palette(placeholder-text); letter-spacing: 1px; }}
+QListWidget#nav {{ background: palette(base); border: none; padding: 8px 0; outline: none; }}
+QListWidget#nav::item {{ min-height: 32px; padding-left: 12px; margin: 0; border: none; border-left: 3px solid transparent; }}
+QListWidget#nav::item:hover {{ background: palette(alternate-base); }}
+QListWidget#nav::item:selected {{ background: palette(alternate-base); color: palette(text); border-left: 3px solid palette(highlight); }}
+QPushButton {{ padding: 6px 18px; border-radius: 2px; border: none; background: palette(midlight); }}
+QPushButton:hover {{ background: palette(alternate-base); }}
+QPushButton:default {{ background: palette(highlight); color: palette(highlighted-text); }}
+QPushButton:checked {{ background: palette(highlight); color: palette(highlighted-text); }}
+QPushButton:flat {{ background: transparent; }}
+QLineEdit, QComboBox, QPlainTextEdit {{ border: 1px solid transparent; border-radius: 2px; padding: 5px 8px; background: palette(alternate-base); }}
+QProgressBar {{ border: none; border-radius: 0; background: palette(alternate-base); height: 6px; text-align: center; }}
+""",
+    "hacking": """
+QFrame#group {{ background: transparent; border: none; }}
+QFrame#card {{ background: palette(base); border: 1px solid palette(midlight); border-radius: 8px; }}
+QFrame#card[active="true"] {{ border: 2px solid palette(highlight); }}
+QLabel#badge {{ color: palette(text); background: palette(midlight); border-radius: 4px; padding: 1px 6px; }}
+QLabel#grouptitle {{ color: palette(placeholder-text); }}
+QListWidget#nav {{ background: palette(alternate-base); border: none; border-right: 1px solid palette(midlight); padding: 8px 0; outline: none; }}
+QListWidget#nav::item {{ min-height: 26px; padding-left: 6px; margin: 1px 8px; border-radius: 5px; border: none; }}
+QListWidget#nav::item:selected {{ background: palette(midlight); color: palette(text); }}
+QPushButton {{ padding: 3px 12px; border-radius: 5px; border: 1px solid palette(midlight); background: palette(button); }}
+QPushButton:hover {{ background: palette(midlight); }}
+QPushButton:default {{ background: palette(highlight); color: palette(highlighted-text); border: none; }}
+QPushButton:checked {{ background: palette(midlight); border: none; }}
+QPushButton:flat {{ background: transparent; border: none; }}
+QLineEdit, QComboBox, QPlainTextEdit {{ border: 1px solid palette(midlight); border-radius: 5px; padding: 3px 7px; background: palette(base); }}
+QProgressBar {{ border: none; border-radius: 3px; background: palette(midlight); height: 6px; text-align: center; }}
+QProgressBar::chunk {{ border-radius: 3px; }}
+""",
+    "server": """
+QFrame#group {{ background: palette(base); border: 1px solid palette(midlight); border-radius: 6px; }}
+QFrame#card {{ background: palette(base); border: 1px solid palette(midlight); border-radius: 6px; }}
+QFrame#card[active="true"] {{ border: 2px solid palette(highlight); }}
+QLabel#badge {{ color: palette(highlighted-text); background: palette(highlight); border-radius: 3px; padding: 1px 6px; }}
+QLabel#grouptitle {{ font-weight: bold; }}
+QListWidget#nav {{ background: palette(window); border: none; border-right: 1px solid palette(midlight); padding: 6px 0; outline: none; }}
+QListWidget#nav::item {{ min-height: 36px; padding-left: 8px; margin: 1px 6px; border-radius: 6px; border: none; }}
+QListWidget#nav::item:hover {{ background: palette(alternate-base); }}
+QListWidget#nav::item:selected {{ background: palette(midlight); color: palette(text); }}
+QPushButton {{ padding: 5px 14px; border-radius: 5px; border: none; background: palette(midlight); }}
+QPushButton:hover {{ background: palette(alternate-base); }}
+QPushButton:default {{ background: palette(highlight); color: palette(highlighted-text); font-weight: bold; }}
+QPushButton:checked {{ background: palette(highlight); color: palette(highlighted-text); }}
+QPushButton:flat {{ background: transparent; }}
+QLineEdit, QComboBox, QPlainTextEdit {{ border: 1px solid palette(midlight); border-radius: 5px; padding: 5px 8px; background: palette(base); }}
+QProgressBar {{ border: none; border-radius: 3px; background: palette(midlight); height: 8px; text-align: center; }}
+QProgressBar::chunk {{ border-radius: 3px; }}
+""",
+}
+
+
 def current_mode():
     import os
     for path in (os.path.expanduser("~/.config/nebulaos/mode"), "/etc/nebulaos/default-mode"):
@@ -57,46 +150,11 @@ def current_mode():
     return "gaming"
 
 
-MODE_SHAPE = {   # one solid accent per mode, neutral borders — no gradients or glow
-    "hacking": dict(card=12, ctl=7, btn=7, nav=7, sel="palette(highlight)", sel_text="#ffffff",
-                    card_border="1px solid palette(midlight)", btn_border="1px solid palette(midlight)"),
-    "gaming": dict(card=8, ctl=6, btn=6, nav=6, sel="palette(highlight)", sel_text="#ffffff",
-                   card_border="1px solid palette(midlight)", btn_border="1px solid palette(midlight)"),
-    "server": dict(card=8, ctl=5, btn=5, nav=5, sel="palette(highlight)", sel_text="#ffffff",
-                   card_border="1px solid palette(midlight)", btn_border="1px solid palette(midlight)"),
-}
-
-
 def build_style(mode=None):
-    t = MODE_SHAPE[mode or current_mode()]
-    return f"""
-QFrame#group {{ background: palette(base); border: {t['card_border']}; border-radius: {t['card']}px; }}
-QFrame#card {{ background: palette(base); border: {t['card_border']}; border-radius: {t['card'] + 2}px; }}
-QFrame#card[active="true"] {{ border: 2px solid palette(highlight); }}
-QLabel#badge {{ color: palette(highlighted-text); background: palette(highlight); border-radius: 9px; padding: 2px 10px; }}
-QListWidget#nav {{ background: palette(window); border: none; padding: 10px 0; outline: none; }}
-QListWidget#nav::item {{ min-height: 34px; padding-left: 10px; margin: 2px 10px; border-radius: {t['nav']}px; border: none; }}
-QListWidget#nav::item:hover {{ background: palette(alternate-base); }}
-QListWidget#nav::item:selected {{ background: {t['sel']}; color: {t['sel_text']}; }}
-QPushButton {{ padding: 6px 16px; border-radius: {t['btn']}px; border: {t['btn_border']}; background: palette(button); }}
-QPushButton:hover {{ background: palette(alternate-base); }}
-QPushButton:default {{ background: {t['sel']}; color: palette(highlighted-text); border: none; font-weight: 600; }}
-QPushButton:checked {{ background: {t['sel']}; color: {t['sel_text']}; border: none; }}
-QPushButton:flat {{ background: transparent; border: none; }}
-QPushButton:disabled {{ color: palette(placeholder-text); }}
-QLineEdit, QComboBox, QPlainTextEdit {{ border: 1px solid palette(midlight); border-radius: {t['ctl']}px;
-    padding: 5px 9px; background: palette(base); }}
-QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus {{ border: 1px solid palette(highlight); }}
-QProgressBar {{ border: none; border-radius: 4px; background: palette(alternate-base); height: 8px; text-align: center; }}
-QProgressBar::chunk {{ border-radius: 4px; background: {t['sel']}; }}
-QScrollBar:vertical {{ width: 8px; background: transparent; margin: 2px; }}
-QScrollBar::handle:vertical {{ background: palette(midlight); border-radius: 3px; min-height: 30px; }}
-QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
-QStatusBar {{ border: none; }}
-QScrollArea {{ background: transparent; }}
-"""
+    return (_STYLES[mode or current_mode()] + _COMMON).replace("{{", "{").replace("}}", "}")
 
 
+MODE = current_mode()
 STYLE = build_style()
 
 
@@ -186,36 +244,30 @@ class Thumb(QWidget):
         p.end()
 
 
-def tile(icon_name, color, size=26):
-    """macOS-style settings icon: white glyph on a colored rounded square."""
-    from PySide6.QtCore import QRectF
-    from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
+def tile(icon_name, color=None, size=26):
+    """Sidebar/list icon: a plain monochrome glyph (accent in Hacking like Finder, text color elsewhere)."""
+    from PySide6.QtGui import QColor, QPainter, QPixmap
     dpr = 2
+    px = int(size * dpr * (0.72 if size <= 28 else 0.62))
+    glyph = QIcon.fromTheme(icon_name + "-symbolic", QIcon.fromTheme(icon_name)).pixmap(px, px)
     pm = QPixmap(size * dpr, size * dpr)
     pm.fill(Qt.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.Antialiasing)
-    path = QPainterPath()
-    path.addRoundedRect(QRectF(0, 0, size * dpr, size * dpr), 6 * dpr, 6 * dpr)
-    base = QColor(color)
-    from PySide6.QtGui import QLinearGradient
-    grad = QLinearGradient(0, 0, 0, size * dpr)
-    grad.setColorAt(0, base.lighter(112))
-    grad.setColorAt(1, base)
-    p.fillPath(path, grad)
-    glyph_size = int(size * dpr * 0.62)
-    glyph = QIcon.fromTheme(icon_name + "-symbolic", QIcon.fromTheme(icon_name)).pixmap(glyph_size, glyph_size)
     if not glyph.isNull():
-        white = QPixmap(glyph.size())
-        white.fill(Qt.transparent)
-        g = QPainter(white)
+        pal = QGuiApplication.palette()
+        tint = pal.highlight().color() if MODE == "hacking" else pal.text().color()
+        if MODE == "gaming":
+            tint.setAlphaF(0.8)
+        mono = QPixmap(glyph.size())
+        mono.fill(Qt.transparent)
+        g = QPainter(mono)
         g.drawPixmap(0, 0, glyph)
         g.setCompositionMode(QPainter.CompositionMode_SourceIn)
-        g.fillRect(white.rect(), QColor("white"))
+        g.fillRect(mono.rect(), tint)
         g.end()
-        off = (size * dpr - glyph_size) // 2
-        p.drawPixmap(off, off, white)
-    p.end()
+        p = QPainter(pm)
+        off = (size * dpr - px) // 2
+        p.drawPixmap(off, off, mono)
+        p.end()
     pm.setDevicePixelRatio(dpr)
     return QIcon(pm)
 
@@ -302,22 +354,31 @@ class Group(QFrame):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(14, 10, 14, 10)
         outer.setSpacing(2)
+        if MODE == "hacking":
+            outer.setContentsMargins(0, 4, 0, 4)
+        self.title_label = None
         if title:
-            t = QLabel(_(title))
+            text = _(title)
+            t = QLabel(text.upper() if MODE == "gaming" else text)
+            t.setObjectName("grouptitle")
             f = t.font()
             f.setBold(True)
+            if MODE != "server":
+                f.setPointSizeF(f.pointSizeF() * 0.85)
             t.setFont(f)
             outer.addWidget(t)
-        if description:
-            d = _muted(QLabel(_(description)))
-            d.setWordWrap(True)
-            outer.addWidget(d)
+            self.title_label = t
         self.rows = outer
 
-    def _row(self, title, subtitle):
+    def _row(self, title, subtitle, icon=None):
         row = QWidget()
         lay = QHBoxLayout(row)
         lay.setContentsMargins(0, 8, 0, 8)
+        if icon is not None:
+            ic = QLabel()
+            ic.setPixmap(icon.pixmap(32, 32))
+            ic.setFixedWidth(40)
+            lay.addWidget(ic, 0, Qt.AlignTop)
         text = QVBoxLayout()
         text.setSpacing(1)
         t = QLabel(_(title))
@@ -328,7 +389,7 @@ class Group(QFrame):
             s.setWordWrap(True)
             text.addWidget(s)
         lay.addLayout(text, 1)
-        if self.rows.count() > (1 if self.rows.itemAt(0) else 0):
+        if self.rows.count() > (1 if self.title_label else 0):
             line = QFrame()
             line.setFrameShape(QFrame.HLine)
             line.setStyleSheet("color: palette(midlight);")
@@ -336,14 +397,14 @@ class Group(QFrame):
         self.rows.addWidget(row)
         return lay
 
+    def row(self, title, subtitle="", icon=None):
+        """A row with an optional app icon; add your own buttons to the returned layout."""
+        return self._row(title, subtitle, icon)
+
     def action(self, title, subtitle, button, callback, primary=False):
         lay = self._row(title, subtitle)
         b = QPushButton(_(button))
         b.setDefault(primary)
-        if primary:
-            f = b.font()
-            f.setBold(True)
-            b.setFont(f)
         b.clicked.connect(lambda: callback())
         lay.addWidget(b, 0, Qt.AlignVCenter)
         return b
@@ -381,16 +442,15 @@ class Page(QScrollArea):
         self.box = QVBoxLayout(body)
         self.box.setContentsMargins(24, 18, 24, 18)
         self.box.setSpacing(14)
-        t = QLabel(_(title))
+        text = _(title)
+        t = QLabel(text.upper() if MODE == "gaming" else text)
+        t.setObjectName("pagetitle")
         f = QFont(t.font())
-        f.setPointSizeF(f.pointSizeF() * 1.45)
+        f.setPointSizeF(f.pointSizeF() * {"gaming": 1.35, "hacking": 1.25, "server": 1.3}[MODE])
         f.setBold(True)
         t.setFont(f)
         self.box.addWidget(t)
-        if subtitle:
-            s = _muted(QLabel(_(subtitle)), 1.0)
-            s.setWordWrap(True)
-            self.box.addWidget(s)
+        self.title = t  # subtitles are not shown: the page title says enough
         self.setWidget(body)
         self._tail = None
 

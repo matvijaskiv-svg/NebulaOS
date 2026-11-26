@@ -1,0 +1,8 @@
+# NebulaOS: Vaultwarden password manager (Bitwarden apps work with it), web on port 8222.
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    restart: unless-stopped
+    ports: ["8222:80"]
+    volumes:
+      - ./data:/data

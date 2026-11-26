@@ -13,7 +13,7 @@ from collections import deque
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/nebulaos")
-from nebula_qt import _, Meter, Page, app, background, fit, in_terminal, tile  # noqa: E402
+from nebula_qt import _, Meter, Page, QIcon, app, background, fit, in_terminal, tile  # noqa: E402
 from PySide6.QtCore import QPointF, QSize, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen  # noqa: E402
 from PySide6.QtCore import QProcess  # noqa: E402
@@ -28,25 +28,28 @@ SERVICES = [  # (key for `nebula server enable`, unit, title, description)
     ("cockpit", "cockpit.socket", "Cockpit", "Web admin panel on port 9090"),
     ("web", "nginx", "Web server", "nginx on port 80"),
     ("db", "postgresql", "Database", "PostgreSQL"),
+    ("vpn", "tailscaled", "Remote access (Tailscale)", "Open your servers from anywhere, no router setup"),
 ]
-TEMPLATES = {  # name: (title, description, (icon, color), port, web path or None)
-    "media": ("Jellyfin", "Media server: your films, series and music on every device",
-              ("applications-multimedia", "#aa5cc3"), 8096, "/"),
-    "nextcloud": ("Nextcloud", "Your own cloud: files, photos, contacts and calendar on your phone",
-                  ("folder-cloud", "#0082c9"), 8082, "/"),
-    "pihole": ("Pi-hole", "Blocks ads on every device at home. Password: nebulaos",
-               ("security-high", "#96060c"), 8081, "/admin/"),
-    "files": ("File server", "Shared folders in the browser for your home network",
-              ("folder-network", "#f59e0b"), 8080, "/"),
-    "minecraft": ("Minecraft", "Your own server to play with friends",
-                  ("input-gaming", "#5d8c33"), 25565, None),
+TEMPLATES = {  # name: (title, description, theme icons, port, web path or None)
+    "media": ("Jellyfin", "Films, series and music on every device", ("jellyfin", "applications-multimedia"), 8096, "/"),
+    "immich": ("Immich", "Your own photo library with phone backup", ("immich", "image-x-generic"), 2283, "/"),
+    "nextcloud": ("Nextcloud", "Files, contacts and calendar in your own cloud", ("nextcloud", "folder-cloud"), 8082, "/"),
+    "vaultwarden": ("Vaultwarden", "Password manager, works with the Bitwarden apps", ("bitwarden", "dialog-password"), 8222, "/"),
+    "homeassistant": ("Home Assistant", "Smart home: lights, sensors, automations", ("homeassistant", "go-home"), 8123, "/"),
+    "pihole": ("Pi-hole", "Blocks ads on every device at home. Password: nebulaos", ("pi-hole", "security-high"), 8081, "/admin/"),
+    "torrent": ("qBittorrent", "Torrents from the browser, downloads in /srv/nebula/torrent", ("qbittorrent", "download"), 8090, "/"),
+    "uptime": ("Uptime Kuma", "Watches your sites and servers", ("utilities-system-monitor", "utilities-system-monitor"), 3001, "/"),
+    "files": ("File server", "Shared folders in the browser for your home network", ("folder-network", "folder"), 8080, "/"),
+    "minecraft": ("Minecraft", "Your own server to play with friends", ("minecraft", "input-gaming"), 25565, None),
 }
 
 
 HELPER = "/usr/lib/nebulaos/server-helper"
-SERVICE_ICONS = {"ssh": ("utilities-terminal", "#64748b"), "docker": ("package-x-generic", "#0db7ed"),
-                 "cockpit": ("computer", "#0066cc"), "web": ("internet-web-browser", "#009639"),
-                 "db": ("server-database", "#336791")}
+SERVICE_ICONS = {"ssh": ("utilities-terminal",), "docker": ("docker", "package-x-generic"),
+                 "cockpit": ("cockpit", "computer"), "web": ("nginx", "internet-web-browser"),
+                 "db": ("postgresql", "server-database"), "vpn": ("tailscale", "network-vpn")}
+SERVICE_BIN = {"ssh": "sshd", "docker": "docker", "cockpit": "cockpit-bridge", "web": "nginx", "db": "postgres",
+               "vpn": "tailscale"}
 
 
 def sh_out(*cmd):
@@ -68,60 +71,15 @@ def local_ip():
         return "127.0.0.1"
 
 
-class Card(QFrame):
-    """A server card: colored icon tile, name, description, status chip and buttons."""
+def app_icon(names):
+    for n in names:
+        if QIcon.hasThemeIcon(n):
+            return QIcon.fromTheme(n)
+    return QIcon.fromTheme("application-x-executable")
 
-    def __init__(self, icon, title, desc, status, ok):
-        super().__init__()
-        self.setObjectName("group")
-        self.setMinimumHeight(150)
-        v = QVBoxLayout(self)
-        v.setContentsMargins(16, 14, 16, 14)
-        v.setSpacing(6)
-        top = QHBoxLayout()
-        glyph, color = icon
-        ic = QLabel()
-        ic.setPixmap(tile(glyph, color, 40).pixmap(40, 40))
-        top.addWidget(ic)
-        name = QLabel(_(title))
-        f = name.font()
-        f.setPointSizeF(f.pointSizeF() * 1.15)
-        f.setBold(True)
-        name.setFont(f)
-        name.setWordWrap(True)
-        top.addWidget(name, 1)
-        chip = QLabel(status)
-        chip.setFixedHeight(22)
-        chip.setStyleSheet(f"QLabel {{ background: {'#30a46c' if ok else 'palette(alternate-base)'}; color: "
-                           f"{'white' if ok else 'palette(text)'}; border-radius: 11px; padding: 0 10px; margin: 0; }}")
-        top.addWidget(chip)
-        v.addLayout(top)
-        d = QLabel(_(desc))
-        d.setWordWrap(True)
-        d.setStyleSheet("color: palette(placeholder-text);")
-        v.addWidget(d)
-        self.notes = QVBoxLayout()
-        v.addLayout(self.notes)
-        v.addStretch(1)
-        self.row = QHBoxLayout()
-        self.row.addStretch(1)
-        v.addLayout(self.row)
 
-    def button(self, text, callback, primary=False):
-        b = QPushButton(_(text))
-        b.setDefault(primary)
-        b.setMinimumWidth(b.sizeHint().width() + 24)
-        b.clicked.connect(lambda: callback())
-        self.row.addWidget(b)
-        return b
-
-    def note(self, text):
-        n = QLabel(text)
-        n.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        f = n.font()
-        f.setBold(True)
-        n.setFont(f)
-        self.notes.addWidget(n)
+def status_text(running, installed):
+    return _("Running") if running else (_("Stopped") if installed else _("Not installed"))
 
 
 class Task(QDialog):
@@ -158,6 +116,13 @@ class Task(QDialog):
 
     def read(self):
         for line in bytes(self.proc.readAllStandardOutput()).decode(errors="replace").splitlines():
+            if "https://login.tailscale.com/" in line and not getattr(self, "opened", False):
+                self.opened = True
+                url = line[line.index("https://"):].split()[0]
+                subprocess.Popen(["xdg-open", url])
+                self.label.setText(_("Sign in to Tailscale in the browser that just opened."))
+                self.log.appendPlainText(url)
+                continue
             if line.startswith("STEP: "):
                 text = line[6:]
                 for pre in ("Installing ", "Starting ", "Stopping "):
@@ -420,63 +385,65 @@ class Panel(QMainWindow):
             after()
         self.show_page(self.nav.currentRow())
 
+    def _buttons(self, lay, buttons):
+        for text, cb, primary in buttons:
+            btn = QPushButton(_(text))
+            btn.setDefault(primary)
+            btn.clicked.connect(lambda _c=False, f=cb: f())
+            lay.addWidget(btn, 0, Qt.AlignVCenter)
+
     def page_services(self):
-        p = Page("Services", "One click: NebulaOS installs what is missing, starts it and opens its port.")
-        grid = QWidget()
-        g = QGridLayout(grid)
-        g.setContentsMargins(0, 0, 0, 0)
-        g.setSpacing(12)
+        p = Page("Services")
+        g = p.group()
         user = os.environ.get("USER", "")
-        for i, (key, unit, title, desc) in enumerate(SERVICES):
-            st = unit_state(unit)
-            installed = shutil.which({"ssh": "sshd", "docker": "docker", "cockpit": "cockpit-bridge",
-                                      "web": "nginx", "db": "postgres"}[key]) is not None
-            card = Card(SERVICE_ICONS[key], title, desc,
-                        _("Running") if st == "active" else (_("Stopped") if installed else _("Not installed")),
-                        st == "active")
-            if st == "active":
-                card.button("Stop", lambda u=unit, k=key, t=title: self.run_helper(_(t), ["service-off", k]))
-                card.button("Logs", lambda u=unit: Logs(self, u).exec())
+        for key, unit, title, desc in SERVICES:
+            on = unit_state(unit) == "active"
+            installed = shutil.which(SERVICE_BIN[key]) is not None
+            sub = f"{status_text(on, installed)} · {_(desc)}"
+            if key == "vpn" and on:
+                ip = sh_out("tailscale", "ip", "-4").strip()
+                if ip:
+                    sub = f"{_('Running')} · {_('Address from anywhere: {}').format(ip)}"
+            lay = g.row(title, sub, app_icon(SERVICE_ICONS[key]))
+            if on:
+                self._buttons(lay, [("Logs", lambda u=unit: Logs(self, u).exec(), False),
+                                    ("Stop", lambda k=key, t=title: self.run_helper(_(t), ["service-off", k]), False)])
             else:
-                card.button("Turn on" if installed else "Install", lambda k=key, t=title: self.run_helper(
-                    _(t), ["service-on", k, user]), primary=True)
-            g.addWidget(card, i // 2, i % 2)
-        p.add(grid)
+                self._buttons(lay, [("Turn on" if installed else "Install",
+                                     lambda k=key, t=title: self.run_helper(_(t), ["service-on", k, user]), True)])
         lg = p.group()
         lg.action("Whole system log", "journalctl", "Show", lambda: in_terminal("journalctl", "-e"))
         return p
 
     def page_templates(self):
-        p = Page("Ready-made servers", "Install in one click — Docker is set up automatically. "
-                                       "They start with the computer; your data stays in /srv/nebula.")
-        grid = QWidget()
-        g = QGridLayout(grid)
-        g.setContentsMargins(0, 0, 0, 0)
-        g.setSpacing(12)
+        p = Page("Ready-made servers")
         root = Path("/usr/share/nebulaos/templates")
-        names = [n for n in TEMPLATES if (root / n / "compose.yaml").exists()]
+        names = [n for n in TEMPLATES if (root / n).is_dir()]
         ip = local_ip()
         listening = sh_out("ss", "-Htln")
         user = os.environ.get("USER", "")
-        for i, name in enumerate(names):
-            title, desc, icon, port, path = TEMPLATES[name]
+        mine, other = p.group("Installed"), p.group("Available")
+        for name in names:
+            title, desc, icons, port, path = TEMPLATES[name]
             installed = Path(f"/srv/nebula/{name}/compose.yaml").exists()
             running = installed and f":{port} " in listening
-            status = _("Running") if running else (_("Stopped") if installed else _("Not installed"))
-            card = Card(icon, title, desc, status, running)
             if not installed:
-                card.button("Install", lambda n=name, t=title: self.deploy(n, t, user), primary=True)
-            else:
-                if running and path is not None:
-                    card.button("Open", lambda pt=port, pa=path: subprocess.Popen(["xdg-open", f"http://localhost:{pt}{pa}"]),
-                                primary=True)
-                if running and path is None:
-                    card.note(_("Address for friends: {}").format(f"{ip}:{port}"))
-                card.button("Stop" if running else "Start",
-                            lambda n=name, t=title, r=running: self.run_helper(_(t), ["stop" if r else "start", n]))
-                card.button("Remove", lambda n=name, t=title: self.remove_server(n, t))
-            g.addWidget(card, i // 2, i % 2)
-        p.add(grid)
+                lay = other.row(title, _(desc), app_icon(icons))
+                self._buttons(lay, [("Install", lambda n=name, t=title: self.deploy(n, t, user), False)])
+                continue
+            where = f"http://{ip}:{port}" if path is not None else f"{ip}:{port}"
+            lay = mine.row(title, f"{status_text(running, True)} · {where}", app_icon(icons))
+            btns = []
+            if running and path is not None:
+                btns.append(("Open", lambda pt=port, pa=path: subprocess.Popen(
+                    ["xdg-open", f"http://localhost:{pt}{pa}"]), True))
+            btns.append(("Stop" if running else "Start",
+                         lambda n=name, t=title, r=running: self.run_helper(_(t), ["stop" if r else "start", n]), False))
+            btns.append(("Remove", lambda n=name, t=title: self.remove_server(n, t), False))
+            self._buttons(lay, btns)
+        for grp in (mine, other):
+            if grp.rows.count() <= 1:
+                grp.hide()
         return p
 
     def deploy(self, name, title, user):

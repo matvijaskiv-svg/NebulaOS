@@ -1,0 +1,3 @@
+# Immich changes its setup often, so the official files are downloaded at install time.
+https://github.com/immich-app/immich/releases/latest/download/docker-compose.yml compose.yaml
+https://github.com/immich-app/immich/releases/latest/download/example.env .env

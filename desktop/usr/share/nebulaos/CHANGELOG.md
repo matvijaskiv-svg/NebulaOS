@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.9.6
+- New look per mode: Gaming like Steam, Hacking like Finder, Server like Ubuntu (no colored tiles or cards); new servers: Immich, Vaultwarden, Home Assistant, qBittorrent, Uptime Kuma; remote access with Tailscale
+
 ## 0.9.5
 - Server Panel: Jellyfin, Nextcloud, Pi-hole, file server and Minecraft install in one click with progress; services install without the terminal
 

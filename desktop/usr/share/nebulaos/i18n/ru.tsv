@@ -690,7 +690,7 @@ Popular	Популярное
 Browsers	Браузеры
 Office and study	Офис и учёба
 System tools	Системные утилиты
-Installed	Установленные
+Installed	Установлено
 Installing {}…	Устанавливаю {}…
 Removing {}…	Удаляю {}…
 The system may ask for your password.	Система может спросить пароль.
@@ -1031,3 +1031,17 @@ Your own server to play with friends	Свой сервер, чтобы игра�
 Address for friends: {}	Адрес для друзей: {}
 Minecraft needs you to accept its EULA (aka.ms/MinecraftEULA). Accept?	Для Minecraft нужно принять его лицензию (aka.ms/MinecraftEULA). Принять?
 Remove {}? Its data stays in /srv/nebula.	Удалить {}? Данные останутся в /srv/nebula.
+Films, series and music on every device	Фильмы, сериалы и музыка на всех устройствах
+Your own photo library with phone backup	Своя фотобиблиотека с копией фото с телефона
+Files, contacts and calendar in your own cloud	Файлы, контакты и календарь в своём облаке
+Password manager, works with the Bitwarden apps	Менеджер паролей, работает с приложениями Bitwarden
+Smart home: lights, sensors, automations	Умный дом: свет, датчики, автоматизации
+Torrents from the browser, downloads in /srv/nebula/torrent	Торренты из браузера, загрузки в /srv/nebula/torrent
+Watches your sites and servers	Следит за вашими сайтами и серверами
+Available	Доступно
+Remote access (Tailscale)	Удалённый доступ (Tailscale)
+Open your servers from anywhere, no router setup	Ваши серверы откуда угодно, без настройки роутера
+Address from anywhere: {}	Адрес откуда угодно: {}
+Sign in to Tailscale in the browser that just opened.	Войдите в Tailscale в открывшемся браузере.
+Sign in to Tailscale in the browser	Войдите в Tailscale в браузере
+Getting the official setup	Скачиваю официальные файлы установки

@@ -2,13 +2,13 @@
 # NebulaOS server helper, run as root through pkexec by the Server Panel.
 #   server-helper deploy <template> <user> [--accept-eula]   install Docker if needed, start a ready-made server
 #   server-helper start|stop|remove <template>
-#   server-helper service-on <ssh|docker|cockpit|web|db> <user>
+#   server-helper service-on <ssh|docker|cockpit|web|db|vpn> <user>
 #   server-helper service-off <ssh|docker|cockpit|web|db>
 # Prints "STEP: <text>" lines the panel shows as progress.
 set -euo pipefail
 SHARE=/usr/share/nebulaos/templates
-declare -A UNIT=([ssh]=sshd.service [docker]=docker.service [cockpit]=cockpit.socket [web]=nginx.service [db]=postgresql.service)
-declare -A PKG=([ssh]=openssh [docker]='docker docker-compose docker-buildx' [cockpit]='cockpit cockpit-podman cockpit-storaged' [web]=nginx [db]=postgresql)
+declare -A UNIT=([ssh]=sshd.service [docker]=docker.service [cockpit]=cockpit.socket [web]=nginx.service [db]=postgresql.service [vpn]=tailscaled.service)
+declare -A PKG=([ssh]=openssh [docker]='docker docker-compose docker-buildx' [cockpit]='cockpit cockpit-podman cockpit-storaged' [web]=nginx [db]=postgresql [vpn]=tailscale)
 declare -A PORT=([ssh]=22/tcp [cockpit]=9090/tcp [web]='80/tcp 443/tcp')
 step() { printf 'STEP: %s\n' "$*"; }
 valid() { [[ $1 =~ ^[a-z0-9-]+$ ]]; }
@@ -33,11 +33,23 @@ ensure_docker() {
 cmd=${1:-}; name=${2:-}
 case $cmd in
   deploy)
-    valid "$name" && [[ -f $SHARE/$name/compose.yaml ]] || { echo "unknown template: $name" >&2; exit 2; }
+    valid "$name" && [[ -d $SHARE/$name ]] || { echo "unknown template: $name" >&2; exit 2; }
     ensure_docker "${3:-}"
     dir=/srv/nebula/$name
     install -d "$dir"
-    cp -n "$SHARE/$name/compose.yaml" "$dir/"
+    if [[ -f $SHARE/$name/fetch ]]; then
+      step "Getting the official setup"
+      while read -r url file; do
+        [[ -z $url || $url == \#* || -e $dir/$file ]] && continue
+        curl -fsSL "$url" -o "$dir/$file"
+      done < "$SHARE/$name/fetch"
+      # Immich: a random database password instead of the example one
+      [[ -f $dir/.env ]] && grep -q '^DB_PASSWORD=postgres$' "$dir/.env" &&
+        sed -i "s/^DB_PASSWORD=postgres$/DB_PASSWORD=$(tr -dc a-zA-Z0-9 </dev/urandom | head -c 24)/" "$dir/.env"
+    else
+      cp -n "$SHARE/$name/compose.yaml" "$dir/"
+    fi
+    [[ -f $dir/compose.yaml ]] || { echo "setup files are missing" >&2; exit 1; }
     [[ ${4:-} == --accept-eula ]] && sed -i 's/EULA: "FALSE"/EULA: "TRUE"/' "$dir/compose.yaml"
     step "Downloading the server (a few minutes the first time)"
     (cd "$dir" && docker compose pull 2>&1 | tr '\r' '\n')
@@ -64,6 +76,10 @@ case $cmd in
     [[ $name == docker ]] && ensure_docker "${3:-}"
     step "Starting ${UNIT[$name]}"
     systemctl enable --now "${UNIT[$name]}"
+    if [[ $name == vpn ]]; then
+      step "Sign in to Tailscale in the browser"
+      timeout 600 tailscale up --operator="${3:-root}" --accept-dns=false 2>&1
+    fi
     [[ -n ${PORT[$name]:-} ]] && open_ports ${PORT[$name]}
     step "Done" ;;
   service-off)

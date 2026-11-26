@@ -1,0 +1,15 @@
+# NebulaOS: qBittorrent with a web interface on port 8090. Downloads go to ./downloads.
+# The first password is printed in the log: Server Panel → Containers → qbittorrent → Logs.
+services:
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    restart: unless-stopped
+    environment:
+      WEBUI_PORT: "8090"
+      TORRENTING_PORT: "6881"
+      PUID: "1000"
+      PGID: "1000"
+    ports: ["8090:8090", "6881:6881", "6881:6881/udp"]
+    volumes:
+      - ./config:/config
+      - ./downloads:/downloads
