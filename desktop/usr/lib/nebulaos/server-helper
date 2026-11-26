@@ -47,14 +47,14 @@ case $cmd in
     step "Done" ;;
   start|stop)
     valid "$name" && [[ -f /srv/nebula/$name/compose.yaml ]] || exit 2
-    step "$cmd"
+    [ "$cmd" = start ] && step "Starting" || step "Stopping"
     (cd "/srv/nebula/$name" && if [[ $cmd == start ]]; then docker compose up -d; else docker compose stop; fi) ;;
   remove)
     valid "$name" && [[ -f /srv/nebula/$name/compose.yaml ]] || exit 2
     step "Removing"
     (cd "/srv/nebula/$name" && docker compose down)
     rm -f "/srv/nebula/$name/compose.yaml"
-    step "Done (data kept in /srv/nebula/$name)" ;;
+    step "Done. Your data is kept in /srv/nebula" ;;
   service-on)
     [[ -n ${UNIT[$name]:-} ]] || exit 2
     install_pkgs ${PKG[$name]}

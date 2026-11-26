@@ -941,3 +941,30 @@ Ready.	Готово.
 Download failed. Is the AI service running and is there internet?	Не вдалося завантажити. Чи працює служба ШІ і чи є інтернет?
 Installing: %s\n	Встановлюю: %s\n
 You can use docker without sudo after you log in again.\n	Docker можна буде використовувати без sudo після повторного входу.\n
+Stop	Зупинити
+Not installed	Не встановлено
+Done.	Готово.
+Done	Готово
+Something went wrong — see the log.	Щось пішло не так — дивіться журнал.
+The system asks for your password once.	Система один раз запитає ваш пароль.
+Installing {}	Встановлюю {}
+Starting {}	Запускаю {}
+Stopping {}	Зупиняю {}
+Starting Docker	Запускаю Docker
+Downloading the server (a few minutes the first time)	Завантажую сервер (першого разу кілька хвилин)
+Starting	Запускаю
+Stopping	Зупиняю
+Removing	Видаляю
+Preparing the database	Готую базу даних
+Done. Your data is kept in /srv/nebula	Готово. Ваші дані залишилися в /srv/nebula
+One click: NebulaOS installs what is missing, starts it and opens its port.	Одна кнопка: NebulaOS сама встановить потрібне, запустить і відкриє порт.
+Whole system log	Увесь журнал системи
+Install in one click — Docker is set up automatically. They start with the computer; your data stays in /srv/nebula.	Встановлення в один клік — Docker налаштується сам. Сервери запускаються разом із комп'ютером, дані зберігаються в /srv/nebula.
+Media server: your films, series and music on every device	Медіасервер: ваші фільми, серіали та музика на всіх пристроях
+Your own cloud: files, photos, contacts and calendar on your phone	Своя хмара: файли, фото, контакти й календар на телефоні
+Blocks ads on every device at home. Password: nebulaos	Блокує рекламу на всіх пристроях удома. Пароль: nebulaos
+Shared folders in the browser for your home network	Спільні папки в браузері для домашньої мережі
+Your own server to play with friends	Свій сервер, щоб грати з друзями
+Address for friends: {}	Адреса для друзів: {}
+Minecraft needs you to accept its EULA (aka.ms/MinecraftEULA). Accept?	Для Minecraft треба прийняти його ліцензію (aka.ms/MinecraftEULA). Прийняти?
+Remove {}? Its data stays in /srv/nebula.	Видалити {}? Дані залишаться в /srv/nebula.

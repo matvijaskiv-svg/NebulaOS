@@ -896,3 +896,30 @@ Ready.	Pronto.
 Download failed. Is the AI service running and is there internet?	Download non riuscito. Il servizio IA è attivo e c'è internet?
 Installing: %s\n	Installazione: %s\n
 You can use docker without sudo after you log in again.\n	Potrai usare docker senza sudo dopo un nuovo accesso.\n
+Stop	Ferma
+Not installed	Non installato
+Done.	Fatto.
+Done	Fatto
+Something went wrong — see the log.	Qualcosa è andato storto — guarda il log.
+The system asks for your password once.	Il sistema chiede la password una volta.
+Installing {}	Installo {}
+Starting {}	Avvio {}
+Stopping {}	Fermo {}
+Starting Docker	Avvio Docker
+Downloading the server (a few minutes the first time)	Scarico il server (la prima volta qualche minuto)
+Starting	Avvio
+Stopping	Fermo
+Removing	Rimuovo
+Preparing the database	Preparo il database
+Done. Your data is kept in /srv/nebula	Fatto. I tuoi dati restano in /srv/nebula
+One click: NebulaOS installs what is missing, starts it and opens its port.	Un clic: NebulaOS installa ciò che manca, lo avvia e apre la porta.
+Whole system log	Log di sistema completo
+Install in one click — Docker is set up automatically. They start with the computer; your data stays in /srv/nebula.	Installazione in un clic — Docker si configura da solo. Partono con il computer; i dati restano in /srv/nebula.
+Media server: your films, series and music on every device	Media server: film, serie e musica su ogni dispositivo
+Your own cloud: files, photos, contacts and calendar on your phone	Il tuo cloud: file, foto, contatti e calendario sul telefono
+Blocks ads on every device at home. Password: nebulaos	Blocca la pubblicità su ogni dispositivo di casa. Password: nebulaos
+Shared folders in the browser for your home network	Cartelle condivise nel browser per la rete di casa
+Your own server to play with friends	Il tuo server per giocare con gli amici
+Address for friends: {}	Indirizzo per gli amici: {}
+Minecraft needs you to accept its EULA (aka.ms/MinecraftEULA). Accept?	Minecraft richiede di accettare la sua EULA (aka.ms/MinecraftEULA). Accetti?
+Remove {}? Its data stays in /srv/nebula.	Rimuovere {}? I dati restano in /srv/nebula.

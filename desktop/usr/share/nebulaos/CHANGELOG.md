@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.9.5
+- Server Panel: Jellyfin, Nextcloud, Pi-hole, file server and Minecraft install in one click with progress; services install without the terminal
+
 ## 0.9.4
 - Server services install themselves (Docker, SSH, Cockpit, nginx, PostgreSQL); Assistant: 10 models with recommendation and download progress; panels locked again
 

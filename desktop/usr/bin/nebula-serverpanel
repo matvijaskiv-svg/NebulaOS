@@ -4,6 +4,7 @@
 Graphs of CPU, memory and network, disk usage, uptime; services with status, on/off
 and their logs; Docker containers; ready-made servers; firewall rules.
 """
+import os
 import shutil
 import subprocess
 import sys
@@ -15,9 +16,10 @@ sys.path.insert(0, "/usr/lib/nebulaos")
 from nebula_qt import _, Meter, Page, app, background, fit, in_terminal, tile  # noqa: E402
 from PySide6.QtCore import QPointF, QSize, Qt, QTimer  # noqa: E402
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen  # noqa: E402
+from PySide6.QtCore import QProcess  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow,
-    QPlainTextEdit, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
+    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
+    QPlainTextEdit, QProgressBar, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 SERVICES = [  # (key for `nebula server enable`, unit, title, description)
@@ -27,12 +29,154 @@ SERVICES = [  # (key for `nebula server enable`, unit, title, description)
     ("web", "nginx", "Web server", "nginx on port 80"),
     ("db", "postgresql", "Database", "PostgreSQL"),
 ]
-TEMPLATES = {"files": ("File server", "Shared folders for your network"),
-             "media": ("Media server", "Films and music for your devices"),
-             "minecraft": ("Minecraft server", "Play with friends"),
-             "nextcloud": ("Your own cloud (Nextcloud)", "Files, photos and calendar — http://this-computer:8080"),
-             "pihole": ("Ad blocker for the home (Pi-hole)", "Panel on port 8081, password nebulaos; set this computer as DNS")}
+TEMPLATES = {  # name: (title, description, (icon, color), port, web path or None)
+    "media": ("Jellyfin", "Media server: your films, series and music on every device",
+              ("applications-multimedia", "#aa5cc3"), 8096, "/"),
+    "nextcloud": ("Nextcloud", "Your own cloud: files, photos, contacts and calendar on your phone",
+                  ("folder-cloud", "#0082c9"), 8082, "/"),
+    "pihole": ("Pi-hole", "Blocks ads on every device at home. Password: nebulaos",
+               ("security-high", "#96060c"), 8081, "/admin/"),
+    "files": ("File server", "Shared folders in the browser for your home network",
+              ("folder-network", "#f59e0b"), 8080, "/"),
+    "minecraft": ("Minecraft", "Your own server to play with friends",
+                  ("input-gaming", "#5d8c33"), 25565, None),
+}
 
+
+HELPER = "/usr/lib/nebulaos/server-helper"
+SERVICE_ICONS = {"ssh": ("utilities-terminal", "#64748b"), "docker": ("package-x-generic", "#0db7ed"),
+                 "cockpit": ("computer", "#0066cc"), "web": ("internet-web-browser", "#009639"),
+                 "db": ("server-database", "#336791")}
+
+
+def sh_out(*cmd):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def local_ip():
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("10.255.255.255", 1))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except OSError:
+        return "127.0.0.1"
+
+
+class Card(QFrame):
+    """A server card: colored icon tile, name, description, status chip and buttons."""
+
+    def __init__(self, icon, title, desc, status, ok):
+        super().__init__()
+        self.setObjectName("group")
+        self.setMinimumHeight(150)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(16, 14, 16, 14)
+        v.setSpacing(6)
+        top = QHBoxLayout()
+        glyph, color = icon
+        ic = QLabel()
+        ic.setPixmap(tile(glyph, color, 40).pixmap(40, 40))
+        top.addWidget(ic)
+        name = QLabel(_(title))
+        f = name.font()
+        f.setPointSizeF(f.pointSizeF() * 1.15)
+        f.setBold(True)
+        name.setFont(f)
+        name.setWordWrap(True)
+        top.addWidget(name, 1)
+        chip = QLabel(status)
+        chip.setFixedHeight(22)
+        chip.setStyleSheet(f"QLabel {{ background: {'#30a46c' if ok else 'palette(alternate-base)'}; color: "
+                           f"{'white' if ok else 'palette(text)'}; border-radius: 11px; padding: 0 10px; margin: 0; }}")
+        top.addWidget(chip)
+        v.addLayout(top)
+        d = QLabel(_(desc))
+        d.setWordWrap(True)
+        d.setStyleSheet("color: palette(placeholder-text);")
+        v.addWidget(d)
+        self.notes = QVBoxLayout()
+        v.addLayout(self.notes)
+        v.addStretch(1)
+        self.row = QHBoxLayout()
+        self.row.addStretch(1)
+        v.addLayout(self.row)
+
+    def button(self, text, callback, primary=False):
+        b = QPushButton(_(text))
+        b.setDefault(primary)
+        b.setMinimumWidth(b.sizeHint().width() + 24)
+        b.clicked.connect(lambda: callback())
+        self.row.addWidget(b)
+        return b
+
+    def note(self, text):
+        n = QLabel(text)
+        n.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        f = n.font()
+        f.setBold(True)
+        n.setFont(f)
+        self.notes.addWidget(n)
+
+
+class Task(QDialog):
+    """Runs the helper through pkexec and shows its steps with a progress bar."""
+
+    def __init__(self, parent, title, cmd):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setMinimumWidth(520)
+        v = QVBoxLayout(self)
+        self.label = QLabel(_("The system asks for your password once."))
+        f = self.label.font()
+        f.setBold(True)
+        self.label.setFont(f)
+        v.addWidget(self.label)
+        self.bar = QProgressBar()
+        self.bar.setRange(0, 0)
+        v.addWidget(self.bar)
+        self.log = QPlainTextEdit()
+        self.log.setReadOnly(True)
+        self.log.setMaximumBlockCount(500)
+        self.log.setFixedHeight(170)
+        self.log.setFont(QFont("monospace", 8))
+        v.addWidget(self.log)
+        self.close_btn = QPushButton(_("Close"))
+        self.close_btn.setEnabled(False)
+        self.close_btn.clicked.connect(self.accept)
+        v.addWidget(self.close_btn, 0, Qt.AlignRight)
+        self.proc = QProcess(self)
+        self.proc.setProcessChannelMode(QProcess.MergedChannels)
+        self.proc.readyReadStandardOutput.connect(self.read)
+        self.proc.finished.connect(self.done)
+        self.proc.start(cmd[0], cmd[1:])
+
+    def read(self):
+        for line in bytes(self.proc.readAllStandardOutput()).decode(errors="replace").splitlines():
+            if line.startswith("STEP: "):
+                text = line[6:]
+                for pre in ("Installing ", "Starting ", "Stopping "):
+                    if text.startswith(pre) and _(text) == text:
+                        text = _(pre + "{}").format(text[len(pre):])
+                self.label.setText(_(text))
+            elif line.strip():
+                self.log.appendPlainText(line)
+
+    def done(self, code, _status):
+        self.bar.setRange(0, 100)
+        self.bar.setValue(100 if code == 0 else 0)
+        self.label.setText(_("Done.") if code == 0 else _("Something went wrong — see the log."))
+        self.close_btn.setEnabled(True)
+        self.close_btn.setDefault(True)
+
+    def reject(self):
+        if self.proc.state() == QProcess.NotRunning:
+            super().reject()
 
 def unit_state(unit):
     r = subprocess.run(["systemctl", "is-active", unit], capture_output=True, text=True)
@@ -243,22 +387,6 @@ class Panel(QMainWindow):
                  lambda: subprocess.Popen(["xdg-open", "https://localhost:9090"]))
         return p
 
-    def page_services(self):
-        p = Page("Services", "Turning a service on also opens its port in the firewall.")
-        g = p.group()
-        for key, unit, title, desc in SERVICES:
-            st = unit_state(unit)
-            label = f"{_(title)}  ·  {_('running') if st == 'active' else _('stopped')}"
-
-            def toggle(on, k=key, u=unit):
-                in_terminal("nebula", "server", "enable", k) if on else in_terminal("sudo", "systemctl", "disable", "--now", u)
-            g.switch(label, desc, st == "active", toggle)
-        lg = p.group("Logs")
-        for _k, unit, title, _d in SERVICES:
-            lg.action(title, unit, "Show", lambda u=unit: Logs(self, u).exec())
-        lg.action("Whole system", "journalctl", "Show", lambda: in_terminal("journalctl", "-e"))
-        return p
-
     def page_containers(self):
         p = Page("Containers", "Docker containers on this server.")
         g = p.group()
@@ -284,17 +412,86 @@ class Panel(QMainWindow):
                                           capture_output=True, text=True, timeout=10).stdout, got)
         return p
 
-    def page_templates(self):
-        p = Page("Ready-made servers", "Each one runs in Docker and starts with the computer.")
-        g = p.group()
-        root = Path("/usr/share/nebulaos/templates")
-        for name in sorted(x.name for x in root.iterdir()) if root.exists() else []:
-            title, desc = TEMPLATES.get(name, (name, ""))
-            if Path(f"/srv/nebula/{name}/compose.yaml").exists():
-                g.action(title, desc, "Remove", lambda n=name: in_terminal("nebula", "template", "remove", n))
+    # ---------- one-click servers and services ----------
+    def run_helper(self, title, args, after=None):
+        dlg = Task(self, title, ["pkexec", HELPER] + args)
+        dlg.exec()
+        if after:
+            after()
+        self.show_page(self.nav.currentRow())
+
+    def page_services(self):
+        p = Page("Services", "One click: NebulaOS installs what is missing, starts it and opens its port.")
+        grid = QWidget()
+        g = QGridLayout(grid)
+        g.setContentsMargins(0, 0, 0, 0)
+        g.setSpacing(12)
+        user = os.environ.get("USER", "")
+        for i, (key, unit, title, desc) in enumerate(SERVICES):
+            st = unit_state(unit)
+            installed = shutil.which({"ssh": "sshd", "docker": "docker", "cockpit": "cockpit-bridge",
+                                      "web": "nginx", "db": "postgres"}[key]) is not None
+            card = Card(SERVICE_ICONS[key], title, desc,
+                        _("Running") if st == "active" else (_("Stopped") if installed else _("Not installed")),
+                        st == "active")
+            if st == "active":
+                card.button("Stop", lambda u=unit, k=key, t=title: self.run_helper(_(t), ["service-off", k]))
+                card.button("Logs", lambda u=unit: Logs(self, u).exec())
             else:
-                g.action(title, desc, "Deploy", lambda n=name: in_terminal("nebula", "template", "deploy", n))
+                card.button("Turn on" if installed else "Install", lambda k=key, t=title: self.run_helper(
+                    _(t), ["service-on", k, user]), primary=True)
+            g.addWidget(card, i // 2, i % 2)
+        p.add(grid)
+        lg = p.group()
+        lg.action("Whole system log", "journalctl", "Show", lambda: in_terminal("journalctl", "-e"))
         return p
+
+    def page_templates(self):
+        p = Page("Ready-made servers", "Install in one click — Docker is set up automatically. "
+                                       "They start with the computer; your data stays in /srv/nebula.")
+        grid = QWidget()
+        g = QGridLayout(grid)
+        g.setContentsMargins(0, 0, 0, 0)
+        g.setSpacing(12)
+        root = Path("/usr/share/nebulaos/templates")
+        names = [n for n in TEMPLATES if (root / n / "compose.yaml").exists()]
+        ip = local_ip()
+        listening = sh_out("ss", "-Htln")
+        user = os.environ.get("USER", "")
+        for i, name in enumerate(names):
+            title, desc, icon, port, path = TEMPLATES[name]
+            installed = Path(f"/srv/nebula/{name}/compose.yaml").exists()
+            running = installed and f":{port} " in listening
+            status = _("Running") if running else (_("Stopped") if installed else _("Not installed"))
+            card = Card(icon, title, desc, status, running)
+            if not installed:
+                card.button("Install", lambda n=name, t=title: self.deploy(n, t, user), primary=True)
+            else:
+                if running and path is not None:
+                    card.button("Open", lambda pt=port, pa=path: subprocess.Popen(["xdg-open", f"http://localhost:{pt}{pa}"]),
+                                primary=True)
+                if running and path is None:
+                    card.note(_("Address for friends: {}").format(f"{ip}:{port}"))
+                card.button("Stop" if running else "Start",
+                            lambda n=name, t=title, r=running: self.run_helper(_(t), ["stop" if r else "start", n]))
+                card.button("Remove", lambda n=name, t=title: self.remove_server(n, t))
+            g.addWidget(card, i // 2, i % 2)
+        p.add(grid)
+        return p
+
+    def deploy(self, name, title, user):
+        args = ["deploy", name, user]
+        if name == "minecraft":
+            if QMessageBox.question(self, _(title), _("Minecraft needs you to accept its EULA "
+                                                      "(aka.ms/MinecraftEULA). Accept?")) != QMessageBox.Yes:
+                return
+            args.append("--accept-eula")
+        self.run_helper(_(title), args)
+
+    def remove_server(self, name, title):
+        if QMessageBox.question(self, _(title), _("Remove {}? Its data stays in /srv/nebula.").format(_(title))) \
+                == QMessageBox.Yes:
+            self.run_helper(_(title), ["remove", name])
 
     def page_firewall(self):
         p = Page("Firewall")
