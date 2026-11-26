@@ -1411,6 +1411,14 @@ T = {
     "Sign in to Tailscale in the browser that just opened.": ("Войдите в Tailscale в открывшемся браузере.", "Увійдіть у Tailscale у браузері, що відкрився.", "Accedi a Tailscale nel browser appena aperto."),
     "Sign in to Tailscale in the browser": ("Войдите в Tailscale в браузере", "Увійдіть у Tailscale у браузері", "Accedi a Tailscale nel browser"),
     "Getting the official setup": ("Скачиваю официальные файлы установки", "Завантажую офіційні файли встановлення", "Scarico i file ufficiali"),
+    "Quick Look": ("Быстрый просмотр", "Швидкий перегляд", "Anteprima rapida"),
+    "Folder": ("Папка", "Тека", "Cartella"),
+    "{} files, {}": ("Файлов: {}, {}", "Файлів: {}, {}", "{} file, {}"),
+    "{} files, {} or more": ("Файлов: {}, {} или больше", "Файлів: {}, {} або більше", "{} file, {} o più"),
+    "First launch: NebulaOS can set this game up for the best performance (GameMode{}). Steam will restart for a few seconds. Set it up?": (
+        "Первый запуск: NebulaOS может настроить игру на лучшую производительность (GameMode{}). Steam перезапустится на пару секунд. Настроить?",
+        "Перший запуск: NebulaOS може налаштувати гру на найкращу продуктивність (GameMode{}). Steam перезапуститься на кілька секунд. Налаштувати?",
+        "Primo avvio: NebulaOS può configurare il gioco per le migliori prestazioni (GameMode{}). Steam si riavvierà per qualche secondo. Configurare?"),
 }
 
 OUT = Path(__file__).resolve().parent.parent / "desktop/usr/share/nebulaos/i18n"
