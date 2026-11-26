@@ -1396,6 +1396,21 @@ T = {
         "Minecraft richiede di accettare la sua EULA (aka.ms/MinecraftEULA). Accetti?"),
     "Remove {}? Its data stays in /srv/nebula.": ("Удалить {}? Данные останутся в /srv/nebula.",
         "Видалити {}? Дані залишаться в /srv/nebula.", "Rimuovere {}? I dati restano in /srv/nebula."),
+    "Films, series and music on every device": ("Фильмы, сериалы и музыка на всех устройствах", "Фільми, серіали та музика на всіх пристроях", "Film, serie e musica su ogni dispositivo"),
+    "Your own photo library with phone backup": ("Своя фотобиблиотека с копией фото с телефона", "Своя фотобібліотека з копією фото з телефона", "La tua libreria foto con backup dal telefono"),
+    "Files, contacts and calendar in your own cloud": ("Файлы, контакты и календарь в своём облаке", "Файли, контакти й календар у своїй хмарі", "File, contatti e calendario nel tuo cloud"),
+    "Password manager, works with the Bitwarden apps": ("Менеджер паролей, работает с приложениями Bitwarden", "Менеджер паролів, працює з застосунками Bitwarden", "Gestore di password, funziona con le app Bitwarden"),
+    "Smart home: lights, sensors, automations": ("Умный дом: свет, датчики, автоматизации", "Розумний дім: світло, датчики, автоматизації", "Casa smart: luci, sensori, automazioni"),
+    "Torrents from the browser, downloads in /srv/nebula/torrent": ("Торренты из браузера, загрузки в /srv/nebula/torrent", "Торенти з браузера, завантаження в /srv/nebula/torrent", "Torrent dal browser, download in /srv/nebula/torrent"),
+    "Watches your sites and servers": ("Следит за вашими сайтами и серверами", "Стежить за вашими сайтами й серверами", "Controlla i tuoi siti e server"),
+    "Installed": ("Установлено", "Встановлено", "Installati"),
+    "Available": ("Доступно", "Доступно", "Disponibili"),
+    "Remote access (Tailscale)": ("Удалённый доступ (Tailscale)", "Віддалений доступ (Tailscale)", "Accesso remoto (Tailscale)"),
+    "Open your servers from anywhere, no router setup": ("Ваши серверы откуда угодно, без настройки роутера", "Ваші сервери звідусіль, без налаштування роутера", "I tuoi server ovunque, senza configurare il router"),
+    "Address from anywhere: {}": ("Адрес откуда угодно: {}", "Адреса звідусіль: {}", "Indirizzo da ovunque: {}"),
+    "Sign in to Tailscale in the browser that just opened.": ("Войдите в Tailscale в открывшемся браузере.", "Увійдіть у Tailscale у браузері, що відкрився.", "Accedi a Tailscale nel browser appena aperto."),
+    "Sign in to Tailscale in the browser": ("Войдите в Tailscale в браузере", "Увійдіть у Tailscale у браузері", "Accedi a Tailscale nel browser"),
+    "Getting the official setup": ("Скачиваю официальные файлы установки", "Завантажую офіційні файли встановлення", "Scarico i file ufficiali"),
 }
 
 OUT = Path(__file__).resolve().parent.parent / "desktop/usr/share/nebulaos/i18n"
