@@ -982,3 +982,8 @@ Address from anywhere: {}	Адреса звідусіль: {}
 Sign in to Tailscale in the browser that just opened.	Увійдіть у Tailscale у браузері, що відкрився.
 Sign in to Tailscale in the browser	Увійдіть у Tailscale у браузері
 Getting the official setup	Завантажую офіційні файли встановлення
+Quick Look	Швидкий перегляд
+Folder	Тека
+{} files, {}	Файлів: {}, {}
+{} files, {} or more	Файлів: {}, {} або більше
+First launch: NebulaOS can set this game up for the best performance (GameMode{}). Steam will restart for a few seconds. Set it up?	Перший запуск: NebulaOS може налаштувати гру на найкращу продуктивність (GameMode{}). Steam перезапуститься на кілька секунд. Налаштувати?

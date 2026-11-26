@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Quick Look
+Name[ru]=Быстрый просмотр
+Name[uk]=Швидкий перегляд
+Name[it]=Anteprima rapida
+Icon=document-preview
+Exec=nebula-quicklook %f
+NoDisplay=true

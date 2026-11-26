@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+"""NebulaOS Quick Look: a fast preview of a file without opening an app (like Finder's Space).
+
+nebula-quicklook FILE — pictures, text and code, PDF (first page), video (a frame), folders, anything else
+as icon + details. ← → go through the other files in the folder, Space / Esc closes, Enter opens.
+"""
+import mimetypes
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, QIcon, app, radius  # noqa: E402
+from PySide6.QtCore import QMimeDatabase, Qt  # noqa: E402
+from PySide6.QtGui import QFont, QGuiApplication, QKeySequence, QPixmap, QShortcut  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
+)
+
+TEXT_LIMIT = 256 * 1024
+MIME = QMimeDatabase()
+
+
+def human(n):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+
+
+def folder_info(path):
+    count, size = 0, 0
+    deadline = time.monotonic() + 1.5          # never hang on a huge folder
+    for root, _dirs, files in os.walk(path):
+        for f in files:
+            count += 1
+            try:
+                size += os.lstat(os.path.join(root, f)).st_size
+            except OSError:
+                pass
+        if time.monotonic() > deadline:
+            return _("{} files, {} or more").format(count, human(size))
+    return _("{} files, {}").format(count, human(size))
+
+
+def frame_of(path, kind):
+    """A picture of a PDF page or a video frame, made with poppler / ffmpegthumbnailer when installed."""
+    out = Path(tempfile.gettempdir()) / f"nebula-ql-{os.getuid()}.png"
+    out.unlink(missing_ok=True)
+    try:
+        if kind == "pdf" and shutil.which("pdftoppm"):
+            subprocess.run(["pdftoppm", "-png", "-singlefile", "-r", "110", "-f", "1", "-l", "1", str(path),
+                            str(out.with_suffix(""))], timeout=15, capture_output=True)
+        elif kind == "video" and shutil.which("ffmpegthumbnailer"):
+            subprocess.run(["ffmpegthumbnailer", "-i", str(path), "-o", str(out), "-s", "1280", "-t", "15%"],
+                           timeout=20, capture_output=True)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return QPixmap(str(out)) if out.exists() else None
+
+
+class Picture(QLabel):
+    """Shows a pixmap scaled to fit, never stretched."""
+
+    def __init__(self):
+        super().__init__()
+        self.setAlignment(Qt.AlignCenter)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.pix = None
+
+    def set(self, pix):
+        self.pix = pix
+        self._fit()
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._fit()
+
+    def _fit(self):
+        if self.pix and not self.pix.isNull():
+            self.setPixmap(self.pix.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+
+class QuickLook(QWidget):
+    def __init__(self, path):
+        super().__init__()
+        self.setWindowTitle(_("Quick Look"))
+        self.setObjectName("ql")
+        self.setStyleSheet(f"QWidget#ql {{ background: palette(window); border-radius: {radius(12)}px; }}")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        bar = QFrame()
+        bar.setObjectName("bar")
+        bar.setStyleSheet("QFrame#bar { border-bottom: 1px solid palette(midlight); }")
+        h = QHBoxLayout(bar)
+        h.setContentsMargins(12, 8, 12, 8)
+        self.title = QLabel()
+        f = self.title.font()
+        f.setBold(True)
+        self.title.setFont(f)
+        self.meta = QLabel()
+        self.meta.setStyleSheet("color: palette(placeholder-text);")
+        h.addWidget(self.title)
+        h.addWidget(self.meta, 1)
+        self.open_btn = QPushButton(_("Open"))
+        self.open_btn.setDefault(True)
+        self.open_btn.clicked.connect(self.open_file)
+        h.addWidget(self.open_btn)
+        v.addWidget(bar)
+        self.stack = QStackedWidget()
+        self.picture = Picture()
+        self.text = QPlainTextEdit()
+        self.text.setReadOnly(True)
+        self.text.setFrameShape(QFrame.NoFrame)
+        self.text.setFont(QFont("monospace", 10))
+        self.info = QLabel()
+        self.info.setAlignment(Qt.AlignCenter)
+        self.info.setWordWrap(True)
+        for w in (self.picture, self.text, self.info):
+            self.stack.addWidget(w)
+        v.addWidget(self.stack, 1)
+        for key, fn in ((Qt.Key_Space, self.close), (Qt.Key_Escape, self.close), (Qt.Key_Return, self.open_file),
+                        (Qt.Key_Right, lambda: self.step(1)), (Qt.Key_Left, lambda: self.step(-1)),
+                        (Qt.Key_Down, lambda: self.step(1)), (Qt.Key_Up, lambda: self.step(-1))):
+            QShortcut(QKeySequence(key), self, activated=fn)
+        self.path = Path(path).resolve()
+        try:
+            self.siblings = sorted((p for p in self.path.parent.iterdir() if not p.name.startswith(".")),
+                                   key=lambda p: (not p.is_dir(), p.name.lower()))
+        except OSError:
+            self.siblings = [self.path]
+        self.show_file(self.path)
+
+    def step(self, d):
+        if self.path in self.siblings and len(self.siblings) > 1:
+            i = (self.siblings.index(self.path) + d) % len(self.siblings)
+            self.show_file(self.siblings[i])
+
+    def open_file(self):
+        subprocess.Popen(["xdg-open", str(self.path)])
+        self.close()
+
+    def show_file(self, path):
+        self.path = path
+        self.title.setText(path.name or str(path))
+        mime = MIME.mimeTypeForFile(str(path))
+        try:
+            st = path.stat()
+            size = human(st.st_size)
+            when = time.strftime("%d.%m.%Y %H:%M", time.localtime(st.st_mtime))
+        except OSError:
+            size, when = "", ""
+        self.meta.setText(f"   {mime.comment()}  ·  {size}  ·  {when}" if not path.is_dir()
+                          else f"   {_('Folder')}  ·  {when}")
+        name = mime.name()
+        pix = None
+        if path.is_dir():
+            return self.show_info(path, "folder", folder_info(path))
+        if name.startswith("image/"):
+            pix = QPixmap(str(path))
+        elif name == "application/pdf":
+            pix = frame_of(path, "pdf")
+        elif name.startswith("video/"):
+            pix = frame_of(path, "video")
+        if pix is not None and not pix.isNull():
+            self.picture.set(pix)
+            return self.stack.setCurrentWidget(self.picture)
+        if mime.inherits("text/plain") or name in ("application/json", "application/x-shellscript",
+                                                   "application/xml", "application/x-yaml"):
+            try:
+                with open(path, "rb") as fh:
+                    data = fh.read(TEXT_LIMIT)
+                self.text.setPlainText(data.decode("utf-8", errors="replace"))
+                return self.stack.setCurrentWidget(self.text)
+            except OSError:
+                pass
+        self.show_info(path, mime.iconName(), mime.comment())
+
+    def show_info(self, path, icon, text):
+        ic = QIcon.fromTheme(icon, QIcon.fromTheme("text-x-generic"))
+        self.picture.set(None)
+        self.info.setPixmap(ic.pixmap(128, 128))
+        self.meta.setText(self.meta.text() + (f"  ·  {text}" if path.is_dir() else ""))
+        self.stack.setCurrentWidget(self.info)
+
+
+def main():
+    if len(sys.argv) < 2 or not os.path.exists(sys.argv[1]):
+        print("usage: nebula-quicklook FILE", file=sys.stderr)
+        return 2
+    a = app("nebula-quicklook", "document-preview")
+    w = QuickLook(sys.argv[1])
+    screen = QGuiApplication.primaryScreen().availableGeometry()
+    w.resize(int(screen.width() * 0.55), int(screen.height() * 0.65))
+    w.move(screen.center() - w.rect().center())
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

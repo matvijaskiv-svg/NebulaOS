@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.9.8
+- Quick Look: preview any file from the right-click menu, arrows go through the folder; Dolphin styled per mode; games get GameMode (and DLSS on NVIDIA) on first launch
+
 ## 0.9.7
 - The mode style now applies to every NebulaOS app: Control Center, Spotlight, Chat, Assistant, Store, Games and Game Bar
 

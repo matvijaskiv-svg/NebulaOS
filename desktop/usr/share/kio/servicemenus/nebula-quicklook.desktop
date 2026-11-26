@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Service
+MimeType=all/all;inode/directory;
+Actions=quickLook
+X-KDE-Priority=TopLevel
+X-KDE-Submenu=
+
+[Desktop Action quickLook]
+Name=Quick Look
+Name[ru]=Быстрый просмотр
+Name[uk]=Швидкий перегляд
+Name[it]=Anteprima rapida
+Icon=document-preview
+Exec=nebula-quicklook %f

@@ -66,8 +66,118 @@ def steam_library():
     return sorted(games, key=lambda g: g["name"].lower())
 
 
-def play(game):
-    subprocess.Popen(["xdg-open", f"steam://rungameid/{game['appid']}"])
+def vdf_load(text):
+    """Steam's KeyValues text format → nested dicts (order kept)."""
+    tokens = re.findall(r'"((?:[^"\\]|\\.)*)"|([{}])', text)
+    pos = 0
+
+    def block():
+        nonlocal pos
+        out = {}
+        while pos < len(tokens):
+            key, brace = tokens[pos]
+            pos += 1
+            if brace == "}":
+                return out
+            val, vbrace = tokens[pos]
+            pos += 1
+            out[key] = block() if vbrace == "{" else val
+        return out
+    return block()
+
+
+def vdf_dump(d, depth=0):
+    tab = "\t" * depth
+    lines = []
+    for k, v in d.items():
+        if isinstance(v, dict):
+            lines += [f'{tab}"{k}"', f"{tab}{{", vdf_dump(v, depth + 1), f"{tab}}}"]
+        else:
+            lines.append(f'{tab}"{k}"\t\t"{v}"')
+    return "\n".join(line for line in lines if line != "")
+
+
+def child(d, name):
+    """Case-insensitive sub-block (Steam writes both "Apps" and "apps"); created if missing."""
+    for k in d:
+        if k.lower() == name.lower() and isinstance(d[k], dict):
+            return d[k]
+    d[name] = {}
+    return d[name]
+
+
+SETUP_DONE = HOME / ".config/nebulaos/games-setup"
+
+
+def recommended_options():
+    opts = []
+    if shutil.which("gamemoderun"):
+        opts.append("gamemoderun")
+    env = []
+    if Path("/proc/driver/nvidia").exists():
+        env.append("PROTON_ENABLE_NVAPI=1")   # DLSS and Reflex in Proton games
+    return " ".join(env + opts + ["%command%"]) if env or opts else ""
+
+
+def setup_game(appid):
+    """First launch: put the recommended launch options into Steam (only if the game has none)."""
+    options = recommended_options()
+    if not options:
+        return False
+    changed = False
+    for root in STEAM_ROOTS:
+        for cfg in (root / "userdata").glob("*/config/localconfig.vdf"):
+            try:
+                data = vdf_load(cfg.read_text(encoding="utf-8", errors="replace"))
+                store = data.get("UserLocalConfigStore")
+                if not isinstance(store, dict):
+                    continue
+                apps = child(child(child(child(store, "Software"), "Valve"), "Steam"), "apps")
+                app_cfg = child(apps, appid)
+                if app_cfg.get("LaunchOptions", "").strip():
+                    continue
+                app_cfg["LaunchOptions"] = options
+                shutil.copy2(cfg, cfg.with_suffix(".vdf.nebula-bak"))
+                cfg.write_text(vdf_dump(data) + "\n", encoding="utf-8")
+                changed = True
+            except (OSError, ValueError, IndexError):
+                continue
+    return changed
+
+
+def steam_running():
+    return subprocess.run(["pgrep", "-x", "steam"], capture_output=True).returncode == 0
+
+
+def play(game, parent=None):
+    import time
+    appid = str(game["appid"])
+    done = set(SETUP_DONE.read_text().split()) if SETUP_DONE.exists() else set()
+    if appid not in done and recommended_options():
+        go = True
+        if steam_running():
+            # Steam rewrites its settings when it exits, so it has to be closed for a moment.
+            from PySide6.QtWidgets import QMessageBox
+            ans = QMessageBox.question(parent, game["name"], _(
+                "First launch: NebulaOS can set this game up for the best performance "
+                "(GameMode{}). Steam will restart for a few seconds. Set it up?").format(
+                ", DLSS" if "NVAPI" in recommended_options() else ""),
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+            if ans == QMessageBox.Cancel:
+                return
+            go = ans == QMessageBox.Yes
+            if go:
+                subprocess.run(["steam", "-shutdown"], capture_output=True)
+                for _i in range(40):
+                    if not steam_running():
+                        break
+                    time.sleep(0.5)
+                go = not steam_running()
+        if go:
+            setup_game(appid)
+        SETUP_DONE.parent.mkdir(parents=True, exist_ok=True)
+        SETUP_DONE.write_text(" ".join(sorted(done | {appid})))
+    subprocess.Popen(["xdg-open", f"steam://rungameid/{appid}"])
 
 
 class Hero(QWidget):
@@ -178,7 +288,7 @@ class Cover(QLabel):
         self.center.choose(self)
 
     def mouseDoubleClickEvent(self, _e):
-        play(self.game)
+        play(self.game, self.window())
 
 
 class Games(QMainWindow):
@@ -231,7 +341,7 @@ class Games(QMainWindow):
             v.addWidget(empty)
             return page
         self.hero = Hero()
-        self.hero.play_btn.clicked.connect(lambda: self.current and play(self.current.game))
+        self.hero.play_btn.clicked.connect(lambda: self.current and play(self.current.game, self))
         v.addWidget(self.hero)
         label = QLabel(_("Your games") + f"  ·  {len(self.games)}")
         f = label.font()

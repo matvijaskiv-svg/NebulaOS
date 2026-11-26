@@ -104,6 +104,34 @@ apply_dock() {
 ' "$key" > "$CONF/panels"
 }
 
+# Dolphin in the mode's style: Finder grid (Hacking), big previews like a game library (Gaming),
+# Nautilus-style list (Server). No menu bar, no zoom slider, previews on, folders first.
+apply_dolphin() {
+  local m=$1 view icon preview places
+  case $m in
+    hacking) view=0 icon=64 preview=64 places=16 ;;
+    gaming)  view=0 icon=80 preview=112 places=22 ;;
+    server)  view=1 icon=22 preview=22 places=16 ;;
+    *) return 0 ;;
+  esac
+  kcfg --file dolphinrc --group General --key GlobalViewProps true
+  kcfg --file dolphinrc --group General --key ShowZoomSlider false
+  kcfg --file dolphinrc --group General --key ShowFullPath false
+  kcfg --file dolphinrc --group General --key BrowseThroughArchives true
+  kcfg --file dolphinrc --group General --key ShowSelectionToggle false
+  kcfg --file dolphinrc --group MainWindow --key MenuBar Disabled
+  kcfg --file dolphinrc --group IconsMode --key IconSize "$icon"
+  kcfg --file dolphinrc --group IconsMode --key PreviewSize "$preview"
+  kcfg --file dolphinrc --group DetailsMode --key IconSize "$icon"
+  kcfg --file dolphinrc --group DetailsMode --key PreviewSize "$preview"
+  kcfg --file dolphinrc --group PlacesPanel --key IconSize "$places"
+  kcfg --file dolphinrc --group PreviewSettings --key Plugins "audiothumbnail,blenderthumbnail,comicbookthumbnail,djvuthumbnail,ebookthumbnail,exrthumbnail,directorythumbnail,fontthumbnail,imagethumbnail,jpegthumbnail,kraorathumbnail,windowsexethumbnail,windowsimagethumbnail,opendocumentthumbnail,svgthumbnail,ffmpegthumbs,gsthumbnail"
+  local vp=${XDG_DATA_HOME:-$HOME/.local/share}/dolphin/view_properties/global
+  install -d "$vp"
+  printf '[Dolphin]\nPreviewsShown=true\nSortFoldersFirst=true\nViewMode=%s\nVersion=4\n\n[Settings]\nHiddenFilesShown=false\n' \
+    "$view" > "$vp/.directory"
+}
+
 # Colors, accent, terminal, keyboard layout — everything the mode defines.
 apply() {
   local m=${1:-$(current_mode)} scheme layout prof
@@ -155,6 +183,7 @@ apply() {
   kcfg --file kxkbrc --group Layout --key Options grp:alt_shift_toggle
   kcfg --file kxkbrc --group Layout --key ResetOldOptions true
   dbus-send --session --type=signal /Layouts org.kde.keyboard.reloadConfig >/dev/null 2>&1 || true
+  apply_dolphin "$m"
   apply_wallpaper "$m"
   apply_dock "$m"
   qdbus_ org.kde.KWin /KWin reconfigure
