@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.9.7
+- The mode style now applies to every NebulaOS app: Control Center, Spotlight, Chat, Assistant, Store, Games and Game Bar
+
 ## 0.9.6
 - New look per mode: Gaming like Steam, Hacking like Finder, Server like Ubuntu (no colored tiles or cards); new servers: Immich, Vaultwarden, Home Assistant, qBittorrent, Uptime Kuma; remote access with Tailscale
 
