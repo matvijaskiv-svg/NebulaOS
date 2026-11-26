@@ -1289,6 +1289,26 @@ T = {
     "Instant replay": ("Повтор", "Повтор", "Replay"),
     "FPS counter": ("Счётчик FPS", "Лічильник FPS", "Contatore FPS"),
     "Clip saved": ("Клип сохранён", "Кліп збережено", "Clip salvata"),
+    # ---- 0.9.3 ----
+    "Transparency": ("Прозрачность", "Прозорість", "Trasparenza"),
+    "NebulaOS saves the state of the system before and after every update. If something broke, bring the system back. Your personal files are not touched.": (
+        "NebulaOS сохраняет состояние системы до и после каждого обновления. Если что-то сломалось — верните систему назад. Личные файлы не затрагиваются.",
+        "NebulaOS зберігає стан системи до і після кожного оновлення. Якщо щось зламалося — поверніть систему назад. Особисті файли не зачіпаються.",
+        "NebulaOS salva lo stato del sistema prima e dopo ogni aggiornamento. Se qualcosa si rompe, torna indietro. I tuoi file non vengono toccati."),
+    "For example before you try something risky": ("Например, перед чем-то рискованным", "Наприклад, перед чимось ризикованим",
+                                                    "Ad esempio prima di qualcosa di rischioso"),
+    "The system asks for your password": ("Система спросит ваш пароль", "Система запитає ваш пароль", "Il sistema chiederà la password"),
+    "No snapshots yet. They appear after the first update.": ("Снимков пока нет. Они появятся после первого обновления.",
+        "Знімків поки немає. Вони з'являться після першого оновлення.", "Ancora nessuna istantanea. Appariranno dopo il primo aggiornamento."),
+    "Bring the system back to {}? It takes effect after a restart; your files in the home folder stay as they are.": (
+        "Вернуть систему к {}? Сработает после перезагрузки; файлы в домашней папке останутся как есть.",
+        "Повернути систему до {}? Спрацює після перезавантаження; файли в домашній теці залишаться як є.",
+        "Riportare il sistema a {}? Avrà effetto dopo il riavvio; i file nella home restano come sono."),
+    "Update: {}": ("Обновление: {}", "Оновлення: {}", "Aggiornamento: {}"),
+    "Update": ("Обновление", "Оновлення", "Aggiornamento"),
+    "Snapshot": ("Снимок", "Знімок", "Istantanea"),
+    "Searching for Windows…": ("Ищу Windows…", "Шукаю Windows…", "Cerco Windows…"),
+    "Add to desktop": ("Добавить на рабочий стол", "Додати на робочий стіл", "Aggiungi alla scrivania"),
 }
 
 OUT = Path(__file__).resolve().parent.parent / "desktop/usr/share/nebulaos/i18n"
