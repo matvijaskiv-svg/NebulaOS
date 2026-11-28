@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.9.12
+- NebulaOS on an existing Garuda, EndeavourOS, CachyOS or Arch without reinstalling (install.sh, undo with sudo nebulaos-undo); works with any LibreOffice variant
+
 ## 0.9.11
 - New: Web Apps (any site becomes an app), USB Stick (write an ISO, format), Toolkit tool sets like Kali plus BlackArch with 2800+ tools, Anonymous mode (random MAC + Tor, browser through Tor) without the terminal; fixes
 
