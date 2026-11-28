@@ -31,6 +31,7 @@ if [[ $what == channel || $what == all ]]; then
   python3 "$src/tools/admin/sign-channel.py" --check
   rm -rf "$dir/channel"
   cp -a "$src/channel" "$dir/channel"
+  install -m 0755 "$src/tools/install-on-arch.sh" "$dir/install.sh"
   cat > "$dir/README.md" <<'EOF'
 # NebulaOS updates
 
@@ -39,6 +40,11 @@ What installed NebulaOS systems download. Nothing to edit here by hand.
 - `channel/channel.json` + `channel.sig` — news, polls, official groups, ban list, wallpaper of the week.
   Every NebulaOS accepts it only with the maintainer's Ed25519 signature.
 - Release `repo` — the pacman repository `[nebulaos]` used by `nebula update`.
+- `install.sh` — NebulaOS on an existing Arch-based system (Garuda, EndeavourOS, CachyOS, Arch)
+  without reinstalling: apps and files stay, `sudo nebulaos-undo` goes back.
+
+      curl -fsSLO https://raw.githubusercontent.com/matvijaskiv-svg/NebulaOS-updates/main/install.sh
+      bash install.sh
 EOF
   git -C "$dir" add -A
   if git -C "$dir" diff --cached --quiet; then
