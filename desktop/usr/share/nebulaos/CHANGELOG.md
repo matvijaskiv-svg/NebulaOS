@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.9.9
+- App Store: starter packs (Creativity, Study and work, Streaming, Gaming extras, Developer, Privacy) installed in one click; fixed cut-off buttons in app tiles; Spotlight converts units (10 km in mi, 100 f in c, 5 gb to mib); Italian completed
+
 ## 0.9.8
 - Quick Look: preview any file from the right-click menu, arrows go through the folder; Dolphin styled per mode; games get GameMode (and DLSS on NVIDIA) on first launch
 

@@ -588,8 +588,69 @@ None of your contacts is online right now.	Nessuno dei tuoi contatti è online o
 Invitation sent	Invito inviato
 Text:	Testo:
 NebulaOS %s is on hold by the NebulaOS team; other packages are updated.\n	NebulaOS %s è sospeso dal team NebulaOS; gli altri pacchetti sono aggiornati.\n
+Polls	Sondaggi
+Users vote in Nebula Chat → Feed. Votes arrive through the official group.	Gli utenti votano in Nebula Chat → Feed. I voti arrivano tramite il gruppo ufficiale.
+New poll	Nuovo sondaggio
+Official groups everyone joins automatically, and the ban list.	Gruppi ufficiali a cui tutti entrano automaticamente e lista dei ban.
+Official groups	Gruppi ufficiali
+Official group	Gruppo ufficiale
+Create an official group	Crea un gruppo ufficiale
+You become its owner: moderators, mute, kick, pinned message	Ne diventi il proprietario: moderatori, silenzia, espelli, messaggio fissato
+Pinned message	Messaggio fissato
+Edit…	Modifica…
+Ban list	Lista dei ban
+Banned users are ignored by every NebulaOS and kicked from official groups.	Gli utenti bannati vengono ignorati da ogni NebulaOS ed espulsi dai gruppi ufficiali.
+Ban a user	Banna un utente
+Ban…	Banna…
+Ban	Banna
+Unban	Sbanna
+User (or paste a public key):	Utente (o incolla una chiave pubblica):
 Support	Supporto
+A wallpaper of the week: every NebulaOS gets it with a “Set” button.	Lo sfondo della settimana: ogni NebulaOS lo riceve con un pulsante «Imposta».
+Current	Attuale
+Publish a new wallpaper	Pubblica un nuovo sfondo
+PNG or JPG, 4K is fine	PNG o JPG, anche 4K
+Up to 25 MB.	Fino a 25 MB.
+Title:	Titolo:
+None	Nessuno
+Hold back a broken release	Blocca una versione difettosa
+Users skip these NebulaOS versions until you release a fix.	Gli utenti saltano queste versioni di NebulaOS finché non pubblichi una correzione.
+Hold back a version	Blocca una versione
+Hold back	Blocca
+Hold…	Blocca…
+Allow	Consenti
+Version:	Versione:
+Keys	Chiavi
+Only the holder of the signing key can publish to NebulaOS users.	Solo chi ha la chiave di firma può pubblicare per gli utenti NebulaOS.
+Signing key	Chiave di firma
+Import your admin.key	Importa il tuo admin.key
+From your backup (USB stick, password manager)	Dal tuo backup (chiavetta USB, gestore di password)
+Import…	Importa…
+Repository copy	Copia del repository
+Found	Trovato
+Missing	Mancante
+Get the NebulaOS repository first (Keys page).	Prima scarica il repository di NebulaOS (pagina Chiavi).
+Your signing key is missing (Keys page).	Manca la tua chiave di firma (pagina Chiavi).
+This key does not match admin.pub in the repository.	Questa chiave non corrisponde ad admin.pub nel repository.
+Users report their version, mode and language when they join the official group. Create it on the Community page and keep Nebula Chat running.	Gli utenti comunicano versione, modalità e lingua quando entrano nel gruppo ufficiale. Crealo nella pagina Community e tieni Nebula Chat aperta.
+No button	Nessun pulsante
+Button: Update now	Pulsante: Aggiorna ora
+Button: Open Nebula Chat	Pulsante: Apri Nebula Chat
+Button: Open Settings	Pulsante: Apri Impostazioni
+Button: Open a link…	Pulsante: Apri un link…
+Question	Domanda
+Answers, separated by commas	Risposte, separate da virgole
+Ask everyone	Chiedi a tutti
+A question and at least two answers.	Una domanda e almeno due risposte.
+Close the poll	Chiudi il sondaggio
 Close	Chiudi
+Votes: {}	Voti: {}
+Open Nebula Chat first, then try again.	Apri prima Nebula Chat, poi riprova.
+Online now	Online ora
+Users seen	Utenti visti
+Versions	Versioni
+Modes	Modalità
+Languages	Lingue
 Keyboard layouts (switch with Alt+Shift):	Layout di tastiera (cambia con Alt+Shift):
 More layouts and options	Altri layout e opzioni
 Layouts: %s (switch: Alt+Shift)\n	Layout: %s (cambia: Alt+Shift)\n
@@ -942,3 +1003,10 @@ Folder	Cartella
 {} files, {}	{} file, {}
 {} files, {} or more	{} file, {} o più
 First launch: NebulaOS can set this game up for the best performance (GameMode{}). Steam will restart for a few seconds. Set it up?	Primo avvio: NebulaOS può configurare il gioco per le migliori prestazioni (GameMode{}). Steam si riavvierà per qualche secondo. Configurare?
+Starter packs	Pacchetti di app
+Creativity	Creatività
+Study and work	Studio e lavoro
+Streaming and chat	Streaming e chat
+Gaming extras	Extra per giocare
+Developer	Sviluppo
+Get all ({})	Installa tutte ({})

@@ -67,6 +67,42 @@ def calc(text):
     return f"{value:,.10g}".replace(",", " ") if isinstance(value, float) else f"{value:,}".replace(",", " ")
 
 
+UNITS = {  # unit: (kind, factor to the base unit)
+    "mm": ("len", 0.001), "cm": ("len", 0.01), "m": ("len", 1), "km": ("len", 1000), "in": ("len", 0.0254),
+    "ft": ("len", 0.3048), "yd": ("len", 0.9144), "mi": ("len", 1609.344),
+    "mg": ("mass", 1e-6), "g": ("mass", 0.001), "kg": ("mass", 1), "t": ("mass", 1000), "oz": ("mass", 0.0283495),
+    "lb": ("mass", 0.453592),
+    "ml": ("vol", 0.001), "l": ("vol", 1), "gal": ("vol", 3.78541), "floz": ("vol", 0.0295735),
+    "b": ("data", 1), "kb": ("data", 1e3), "mb": ("data", 1e6), "gb": ("data", 1e9), "tb": ("data", 1e12),
+    "kib": ("data", 1024), "mib": ("data", 1024**2), "gib": ("data", 1024**3), "tib": ("data", 1024**4),
+    "ms": ("time", 0.001), "s": ("time", 1), "min": ("time", 60), "h": ("time", 3600), "d": ("time", 86400),
+    "kmh": ("speed", 1 / 3.6), "mph": ("speed", 0.44704), "mps": ("speed", 1), "kn": ("speed", 0.514444),
+    "c": ("temp", None), "f": ("temp", None), "k": ("temp", None),
+}
+UNIT_RE = __import__("re").compile(r"^\s*(-?[\d.,]+)\s*([a-z°/]+)\s+(?:in|to|в|a|у)\s+([a-z°/]+)\s*$", 2)
+
+
+def convert(text):
+    """10 km in mi, 100 f in c, 5 gb to mib, 3 h в min → result string or None."""
+    m = UNIT_RE.match(text)
+    if not m:
+        return None
+    clean = lambda u: u.lower().replace("°", "").replace("km/h", "kmh").replace("m/s", "mps")  # noqa: E731
+    a, b = clean(m.group(2)), clean(m.group(3))
+    if a not in UNITS or b not in UNITS or UNITS[a][0] != UNITS[b][0]:
+        return None
+    try:
+        v = float(m.group(1).replace(",", "."))
+    except ValueError:
+        return None
+    if UNITS[a][0] == "temp":
+        kelvin = {"c": v + 273.15, "f": (v - 32) * 5 / 9 + 273.15, "k": v}[a]
+        out = {"c": kelvin - 273.15, "f": (kelvin - 273.15) * 9 / 5 + 32, "k": kelvin}[b]
+    else:
+        out = v * UNITS[a][1] / UNITS[b][1]
+    return f"{out:,.6g}".replace(",", " ") + " " + m.group(3)
+
+
 def load_apps():
     lang = (os.environ.get("LANG") or "en")[:2]
     apps, seen = [], set()
@@ -156,6 +192,9 @@ class Spotlight(QWidget):
             self.list.hide()
             self.adjustSize()
             return
+        conv = convert(text)
+        if conv is not None:
+            self.add("accessories-calculator", f"= {conv}", _("Copy"), ("copy", conv.rsplit(" ", 1)[0].replace(" ", "")))
         result = calc(text)
         if result is not None:
             self.add("accessories-calculator", f"= {result}", _("Copy"), ("copy", result.replace(" ", "")))

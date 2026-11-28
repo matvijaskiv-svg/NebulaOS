@@ -47,6 +47,22 @@ CATEGORIES = [  # (title, Flathub category, icon, color)
 PERCENT = re.compile(r"(\d{1,3})%")
 
 
+BUNDLES = [  # (title, Flathub ids) — useful sets, installed together in one click
+    ("Creativity", ["org.kde.krita", "org.inkscape.Inkscape", "org.kde.kdenlive", "org.audacityteam.Audacity",
+                    "org.blender.Blender"]),
+    ("Study and work", ["md.obsidian.Obsidian", "org.onlyoffice.desktopeditors", "com.github.xournalpp.xournalpp",
+                        "org.zotero.Zotero"]),
+    ("Streaming and chat", ["com.obsproject.Studio", "com.discordapp.Discord", "org.telegram.desktop",
+                            "com.spotify.Client"]),
+    ("Gaming extras", ["com.heroicgameslauncher.hgl", "net.lutris.Lutris", "com.usebottles.bottles",
+                       "net.davidotek.pupgui2", "com.github.Matoking.protontricks"]),
+    ("Developer", ["com.visualstudio.code", "io.github.shiftey.Desktop", "io.dbeaver.DBeaverCommunity",
+                   "rest.insomnia.Insomnia"]),
+    ("Privacy", ["org.keepassxc.KeePassXC", "org.torproject.torbrowser-launcher", "org.signal.Signal",
+                 "com.protonvpn.www"]),
+]
+
+
 def ui_lang():
     try:
         return (Path.home() / ".config/nebulaos/lang").read_text().strip() or "en"
@@ -334,6 +350,21 @@ def muted(text, wrap=True):
     return lbl
 
 
+class Elided(QLabel):
+    """One muted line that shortens itself with … to the width it gets (never pushes the button out)."""
+
+    def __init__(self, text):
+        super().__init__()
+        self.full = text
+        self.setStyleSheet("color: palette(placeholder-text);")
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.setToolTip(text)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self.setText(self.fontMetrics().elidedText(self.full, Qt.ElideRight, max(10, self.width())))
+
+
 class Tile(QFrame):
     """App tile: icon, name, one-line summary, Get/Open button. Click opens the app page."""
 
@@ -357,17 +388,17 @@ class Tile(QFrame):
         f = name.font()
         f.setBold(True)
         name.setFont(f)
-        summary = muted("", wrap=False)
-        summary.setText(summary.fontMetrics().elidedText(item.get("summary", ""), Qt.ElideRight, 190))
+        name.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        summary = Elided(item.get("summary", ""))
         text.addWidget(name)
         text.addWidget(summary)
         h.addLayout(text, 1)
         installed = store.is_installed(item)
         btn = QPushButton(_("Open") if installed else _("Get"))
         btn.setDefault(not installed)
-        btn.setMinimumWidth(104)
+        btn.setMinimumWidth(max(88, btn.sizeHint().width() + 12))
         btn.clicked.connect(lambda: store.primary_action(item))
-        h.addWidget(btn)
+        h.addWidget(btn, 0, Qt.AlignVCenter)
 
     def mouseReleaseEvent(self, _e):
         self.store.open_app(self.item)
@@ -601,6 +632,58 @@ class Store(QMainWindow):
         h.addWidget(btn, 0, Qt.AlignVCenter)
         return card
 
+    def bundles(self):
+        host = QWidget()
+        g = QGridLayout(host)
+        g.setContentsMargins(0, 0, 0, 0)
+        g.setSpacing(12)
+        n = 0
+        for title, ids in BUNDLES:
+            items = [self.by_id[i] for i in ids if i in self.by_id]
+            if len(items) < 2:
+                continue
+            missing = [it for it in items if not self.is_installed(it)]
+            card = QFrame()
+            card.setObjectName("group")
+            v = QVBoxLayout(card)
+            v.setContentsMargins(14, 12, 14, 12)
+            name = QLabel(_(title))
+            f = name.font()
+            f.setBold(True)
+            name.setFont(f)
+            v.addWidget(name)
+            icons = QHBoxLayout()
+            icons.setSpacing(6)
+            for it in items:
+                ic = QLabel()
+                ic.setPixmap(app_icon(it, 36))
+                ic.setToolTip(it["name"])
+                icons.addWidget(ic)
+            icons.addStretch(1)
+            v.addLayout(icons)
+            names = muted(", ".join(it["name"] for it in items))
+            v.addWidget(names)
+            btn = QPushButton(_("Get all ({})").format(len(missing)) if missing else _("Installed"))
+            btn.setEnabled(bool(missing))
+            btn.clicked.connect(lambda _c=False, t=title, m=missing: self.install_bundle(t, m))
+            v.addWidget(btn, 0, Qt.AlignRight)
+            g.addWidget(card, n // 3, n % 3)
+            n += 1
+        for c in range(3):
+            g.setColumnStretch(c, 1)
+        return host if n else None
+
+    def install_bundle(self, title, items):
+        if not items:
+            return
+        # one flatpak call for the whole pack: shared runtimes are downloaded once
+        queue = steps(items[0], False)[:1] + [["flatpak", "install", "--user", "-y", "--noninteractive", "flathub"]
+                                              + [it["id"] for it in items]]
+        dlg = Progress(self, {"name": _(title), "source": "flathub"}, False, queue)
+        dlg.exec()
+        self.refresh_installed()
+        self.show_nav(self.nav.currentRow())
+
     def row_header(self, title, target_row=None):
         h = QHBoxLayout()
         h.addWidget(heading(title, 1.2))
@@ -618,6 +701,10 @@ class Store(QMainWindow):
         feat = self.featured()
         if feat:
             v.addWidget(self.hero(feat))
+        packs = self.bundles()
+        if packs:
+            v.addLayout(self.row_header(_("Starter packs")))
+            v.addWidget(packs)
         popular = [self.resolve(e) for e in self.curated.get("Popular", [])]
         if popular:
             v.addLayout(self.row_header(_("Popular")))
