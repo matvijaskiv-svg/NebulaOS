@@ -47,19 +47,31 @@ CATEGORIES = [  # (title, Flathub category, icon, color)
 PERCENT = re.compile(r"(\d{1,3})%")
 
 
-BUNDLES = [  # (title, Flathub ids) — useful sets, installed together in one click
-    ("Creativity", ["org.kde.krita", "org.inkscape.Inkscape", "org.kde.kdenlive", "org.audacityteam.Audacity",
-                    "org.blender.Blender"]),
+BUNDLES = [  # (title, Flathub ids) — useful sets, installed together in one click; ids Flathub lacks are skipped
+    ("3D and game making", ["org.blender.Blender", "org.godotengine.Godot", "org.freecad.FreeCAD",
+                            "com.unity.UnityHub", "net.meshlab.MeshLab"]),
+    ("Drawing and design", ["org.kde.krita", "org.inkscape.Inkscape", "org.gimp.GIMP",
+                            "com.orama_interactive.Pixelorama", "net.scribus.Scribus"]),
+    ("Video editing", ["org.kde.kdenlive", "org.shotcut.Shotcut", "org.openshot.OpenShot", "fr.handbrake.ghb",
+                       "org.pitivi.Pitivi"]),
+    ("Music making", ["io.lmms.LMMS", "org.ardour.Ardour", "org.musescore.MuseScore", "org.audacityteam.Audacity",
+                      "org.hydrogenmusic.Hydrogen"]),
+    ("Photography", ["org.darktable.Darktable", "com.rawtherapee.RawTherapee", "org.kde.digikam",
+                     "net.sourceforge.Hugin", "org.gimp.GIMP"]),
+    ("3D printing", ["com.ultimaker.cura", "com.prusa3d.PrusaSlicer", "com.bambulab.BambuStudio",
+                     "org.freecad.FreeCAD"]),
     ("Study and work", ["md.obsidian.Obsidian", "org.onlyoffice.desktopeditors", "com.github.xournalpp.xournalpp",
-                        "org.zotero.Zotero"]),
+                        "org.zotero.Zotero", "org.gnucash.GnuCash"]),
     ("Streaming and chat", ["com.obsproject.Studio", "com.discordapp.Discord", "org.telegram.desktop",
-                            "com.spotify.Client"]),
+                            "com.spotify.Client", "org.signal.Signal"]),
     ("Gaming extras", ["com.heroicgameslauncher.hgl", "net.lutris.Lutris", "com.usebottles.bottles",
                        "net.davidotek.pupgui2", "com.github.Matoking.protontricks"]),
+    ("Emulators", ["org.libretro.RetroArch", "org.DolphinEmu.dolphin-emu", "net.pcsx2.PCSX2", "org.ppsspp.PPSSPP",
+                   "net.rpcs3.RPCS3"]),
     ("Developer", ["com.visualstudio.code", "io.github.shiftey.Desktop", "io.dbeaver.DBeaverCommunity",
-                   "rest.insomnia.Insomnia"]),
+                   "rest.insomnia.Insomnia", "io.podman_desktop.PodmanDesktop"]),
     ("Privacy", ["org.keepassxc.KeePassXC", "org.torproject.torbrowser-launcher", "org.signal.Signal",
-                 "com.protonvpn.www"]),
+                 "com.protonvpn.www", "org.cryptomator.Cryptomator"]),
 ]
 
 
@@ -419,7 +431,7 @@ class Store(QMainWindow):
         self.nav.setObjectName("nav")
         self.nav.setFixedWidth(230)
         self.nav.setIconSize(QSize(24, 24))
-        self.pages = [("Discover", "starred", "#f59e0b", None)] + \
+        self.pages = [("Discover", "starred", "#f59e0b", None), ("Starter packs", "package-x-generic", "", "packs")] + \
                      [(t, i, c, cat) for t, cat, i, c in CATEGORIES] + \
                      [("Installed", "checkmark", "#16a34a", "installed"), ("Updates", "update-none", "#0a84ff", "updates")]
         for title, icon, color, _k in self.pages:
@@ -538,6 +550,14 @@ class Store(QMainWindow):
             self.set_content(self.loading_page())
         elif key is None:
             self.set_content(self.discover_page())
+        elif key == "packs":
+            w, v = self.page_box()
+            v.addWidget(heading(_("Starter packs"), 1.7))
+            packs = self.bundles()
+            if packs:
+                v.addWidget(packs)
+            v.addStretch(1)
+            self.set_content(w)
         elif key == "installed":
             self.set_content(self.installed_page())
         elif key == "updates":
@@ -632,14 +652,14 @@ class Store(QMainWindow):
         h.addWidget(btn, 0, Qt.AlignVCenter)
         return card
 
-    def bundles(self):
+    def bundles(self, limit=None):
         host = QWidget()
         g = QGridLayout(host)
         g.setContentsMargins(0, 0, 0, 0)
         g.setSpacing(12)
         n = 0
-        for title, ids in BUNDLES:
-            items = [self.by_id[i] for i in ids if i in self.by_id]
+        for title, ids in BUNDLES[:limit]:
+            items = list({i: self.by_id[i] for i in ids if i in self.by_id}.values())
             if len(items) < 2:
                 continue
             missing = [it for it in items if not self.is_installed(it)]
@@ -701,15 +721,15 @@ class Store(QMainWindow):
         feat = self.featured()
         if feat:
             v.addWidget(self.hero(feat))
-        packs = self.bundles()
+        packs = self.bundles(limit=6)
         if packs:
-            v.addLayout(self.row_header(_("Starter packs")))
+            v.addLayout(self.row_header(_("Starter packs"), 1))
             v.addWidget(packs)
         popular = [self.resolve(e) for e in self.curated.get("Popular", [])]
         if popular:
             v.addLayout(self.row_header(_("Popular")))
             v.addWidget(self.tiles(popular[:9]))
-        for row, (title, cat, _i, _c) in enumerate(CATEGORIES[:4], start=1):
+        for row, (title, cat, _i, _c) in enumerate(CATEGORIES[:4], start=2):
             apps = [a for a in self.catalog if cat in a["cats"] and a.get("icon") and a.get("shots")]
             if apps:
                 import random

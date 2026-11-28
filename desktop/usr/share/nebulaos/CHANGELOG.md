@@ -1,5 +1,8 @@
 # NebulaOS changelog
 
+## 0.9.10
+- App Store: 12 starter packs on their own page (3D and game making with Blender, Godot, FreeCAD; drawing, video editing, music making, photography, 3D printing, emulators and more)
+
 ## 0.9.9
 - App Store: starter packs (Creativity, Study and work, Streaming, Gaming extras, Developer, Privacy) installed in one click; fixed cut-off buttons in app tiles; Spotlight converts units (10 km in mi, 100 f in c, 5 gb to mib); Italian completed
 
