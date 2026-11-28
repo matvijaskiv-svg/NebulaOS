@@ -32,6 +32,7 @@ if [[ $what == channel || $what == all ]]; then
   rm -rf "$dir/channel"
   cp -a "$src/channel" "$dir/channel"
   install -m 0755 "$src/tools/install-on-arch.sh" "$dir/install.sh"
+  install -m 0755 "$src/tools/dualboot.sh" "$dir/dualboot.sh"
   cat > "$dir/README.md" <<'EOF'
 # NebulaOS updates
 
@@ -45,6 +46,12 @@ What installed NebulaOS systems download. Nothing to edit here by hand.
 
       curl -fsSLO https://raw.githubusercontent.com/matvijaskiv-svg/NebulaOS-updates/main/install.sh
       bash install.sh
+
+- `dualboot.sh` — NebulaOS next to Garuda (or any Arch-based system on btrfs), chosen in the boot menu.
+  No USB stick, no repartitioning: own btrfs subvolumes. `sudo bash dualboot.sh remove` deletes it again.
+
+      curl -fsSLO https://raw.githubusercontent.com/matvijaskiv-svg/NebulaOS-updates/main/dualboot.sh
+      sudo bash dualboot.sh
 EOF
   git -C "$dir" add -A
   if git -C "$dir" diff --cached --quiet; then
