@@ -2,7 +2,7 @@
 # Package with all NebulaOS files. Built by build.sh / tools/publish-repo.sh,
 # which put the project's desktop/ folder next to this PKGBUILD.
 pkgname=nebulaos-desktop
-pkgver=0.9.10
+pkgver=0.9.11
 pkgrel=1
 pkgdesc='NebulaOS desktop (KDE Plasma): gaming/hacking/server modes, locked styling, settings, updates'
 arch=('any')
@@ -22,7 +22,7 @@ depends=(
   papirus-icon-theme capitaine-cursors
   inter-font noto-fonts noto-fonts-emoji ttf-jetbrains-mono-nerd ttf-ubuntu-font-family ttf-nerd-fonts-symbols
   zram-generator fastfetch toxcore brightnessctl fwupd gpu-screen-recorder lm_sensors
-  poppler ffmpegthumbnailer
+  poppler ffmpegthumbnailer exfatprogs dosfstools parted ntfs-3g
   adwaita-icon-theme adwaita-cursors vimix-cursors ttf-fira-sans ttf-ubuntu-font-family
 )
 optdepends=(
@@ -42,7 +42,7 @@ install=nebulaos-desktop.install
 
 package() {
   cp -a "$startdir/desktop/." "$pkgdir/"
-  chmod 0755 "$pkgdir"/usr/bin/* "$pkgdir"/usr/lib/nebulaos/server-helper "$pkgdir"/usr/lib/nebulaos/style-lock
+  chmod 0755 "$pkgdir"/usr/bin/* "$pkgdir"/usr/lib/nebulaos/server-helper "$pkgdir"/usr/lib/nebulaos/system-helper "$pkgdir"/usr/lib/nebulaos/style-lock
   printf '%s\n' "$pkgver" > "$pkgdir/usr/share/nebulaos/VERSION"
   install -d "$pkgdir/etc/systemd/user/timers.target.wants"
   ln -sf /usr/lib/systemd/user/nebula-update-check.timer "$pkgdir/etc/systemd/user/timers.target.wants/"

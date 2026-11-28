@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""NebulaOS USB: write a system image (ISO) to a USB stick, or format a stick — no terminal.
+
+Only removable USB disks are listed; the helper refuses anything else.
+"""
+import hashlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, Page, Qt, app, background, fit, helper, tile  # noqa: E402
+from PySide6.QtCore import QSize, QTimer  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
+    QMainWindow, QMessageBox, QPushButton, QStackedWidget, QWidget,
+)
+
+
+def usb_disks():
+    """[(device, 'Model · 32 GB')] for removable USB disks."""
+    try:
+        out = subprocess.run(["lsblk", "-J", "-b", "-d", "-o", "NAME,SIZE,MODEL,VENDOR,TRAN,RM,TYPE"],
+                             capture_output=True, text=True, timeout=10).stdout
+        disks = json.loads(out).get("blockdevices", [])
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return []
+    found = []
+    for d in disks:
+        if d.get("type") == "disk" and (d.get("tran") == "usb" or str(d.get("rm")) in ("1", "True", "true")) \
+                and int(d.get("size") or 0) > 0:
+            name = " ".join(x for x in ((d.get("vendor") or "").strip(), (d.get("model") or "").strip()) if x)
+            found.append((f"/dev/{d['name']}", f"{name or _('USB stick')} · {int(d['size']) / 1e9:.1f} GB"))
+    return found
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(4 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+class Usb(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("USB Stick"))
+        self.nav = QListWidget()
+        self.nav.setObjectName("nav")
+        self.nav.setFixedWidth(210)
+        self.nav.setIconSize(QSize(24, 24))
+        self.builders = [("Write an image", "media-flash", self.page_write),
+                         ("Format", "drive-removable-media-usb", self.page_format)]
+        for title, icon, _b in self.builders:
+            self.nav.addItem(QListWidgetItem(tile(icon, None), _(title)))
+        self.stack = QStackedWidget()
+        self.nav.currentRowChanged.connect(self.show_page)
+        body = QWidget()
+        lay = QHBoxLayout(body)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(self.nav)
+        lay.addWidget(self.stack, 1)
+        self.setCentralWidget(body)
+        self.iso = ""
+        self.nav.setCurrentRow(0)
+        self.timer = QTimer(self)                 # sticks plugged in or out → refresh the list
+        self.timer.timeout.connect(self.refresh_disks)
+        self.timer.start(3000)
+        self.last = usb_disks()
+
+    def refresh_disks(self):
+        now = usb_disks()
+        if now != self.last:
+            self.last = now
+            self.show_page(self.nav.currentRow())
+
+    def show_page(self, row):
+        old = self.stack.currentWidget()
+        page = self.builders[row][2]()
+        self.stack.addWidget(page)
+        self.stack.setCurrentWidget(page)
+        if old:
+            self.stack.removeWidget(old)
+            old.deleteLater()
+
+    def disk_combo(self):
+        combo = QComboBox()
+        disks = usb_disks()
+        for dev, label in disks:
+            combo.addItem(f"{label}  ({dev})", dev)
+        if not disks:
+            combo.addItem(_("Plug in a USB stick"), "")
+            combo.setEnabled(False)
+        combo.setMinimumWidth(320)
+        return combo
+
+    # ---------- write ----------
+    def page_write(self):
+        p = Page("Write an image")
+        g = p.group()
+        file_lay = g.row("Image", self.iso or _("An .iso or .img file, for example NebulaOS"))
+        pick = QPushButton(_("Choose…"))
+        pick.clicked.connect(self.pick_iso)
+        file_lay.addWidget(pick)
+        lay = g.row("USB stick", "")
+        self.write_disk = self.disk_combo()
+        lay.addWidget(self.write_disk)
+        if self.iso:
+            check = p.group("Checksum (SHA-256)")
+            self.sum_label = QLabel("…")
+            self.sum_label.setWordWrap(True)
+            self.sum_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            check.widget(self.sum_label)
+            path = self.iso
+            background(lambda: sha256(path), lambda h: self.sum_label.setText(h if isinstance(h, str) else "—"))
+        go = p.group()
+        b = go.action("Write", _("Everything on the stick will be erased."), "Write", self.write, primary=True)
+        b.setEnabled(bool(self.iso) and self.write_disk.isEnabled())
+        return p
+
+    def pick_iso(self):
+        path, _f = QFileDialog.getOpenFileName(self, _("Choose an image"), str(Path.home() / "Downloads"),
+                                               _("Disk images") + " (*.iso *.img)")
+        if path:
+            self.iso = path
+            self.show_page(0)
+
+    def write(self):
+        dev = self.write_disk.currentData()
+        if not dev or not self.iso:
+            return
+        if QMessageBox.warning(self, _("Write an image"),
+                               _("Everything on {} will be erased. Continue?").format(self.write_disk.currentText()),
+                               QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+            return
+        if helper(self, _("Write an image"), "usb-write", dev, self.iso):
+            QMessageBox.information(self, _("Write an image"), _("Done. You can remove the USB stick."))
+
+    # ---------- format ----------
+    def page_format(self):
+        p = Page("Format")
+        g = p.group()
+        lay = g.row("USB stick", "")
+        self.fmt_disk = self.disk_combo()
+        lay.addWidget(self.fmt_disk)
+        self.fs = g.combo("File system", ["exFAT — works everywhere, big files", "FAT32 — old devices, TVs, cars",
+                                          "NTFS — Windows", "ext4 — Linux only"], 0, lambda _i: None)
+        lay = g.row("Name", "")
+        self.label = QLineEdit("NEBULA")
+        self.label.setMaxLength(11)
+        lay.addWidget(self.label)
+        go = p.group()
+        b = go.action("Format", _("Everything on the stick will be erased."), "Format", self.format, primary=True)
+        b.setEnabled(self.fmt_disk.isEnabled())
+        return p
+
+    def format(self):
+        dev = self.fmt_disk.currentData()
+        if not dev:
+            return
+        fs = ["exfat", "fat32", "ntfs", "ext4"][self.fs.currentIndex()]
+        if QMessageBox.warning(self, _("Format"),
+                               _("Everything on {} will be erased. Continue?").format(self.fmt_disk.currentText()),
+                               QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+            return
+        helper(self, _("Format"), "usb-format", dev, fs, self.label.text() or "USB")
+
+
+def main():
+    a = app("nebula-usb", "drive-removable-media-usb")
+    w = Usb()
+    fit(w, 860, 560)
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

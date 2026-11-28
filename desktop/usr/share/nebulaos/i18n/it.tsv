@@ -1017,3 +1017,66 @@ Music making	Fare musica
 Photography	Fotografia
 3D printing	Stampa 3D
 Emulators	Emulatori
+USB Stick	Chiavetta USB
+USB stick	Chiavetta USB
+Write an image	Scrivi un'immagine
+Format	Formatta
+Image	Immagine
+An .iso or .img file, for example NebulaOS	Un file .iso o .img, per esempio NebulaOS
+Write	Scrivi
+Everything on the stick will be erased.	Tutto sulla chiavetta verrà cancellato.
+Choose an image	Scegli un'immagine
+Disk images	Immagini disco
+Everything on {} will be erased. Continue?	Tutto su {} verrà cancellato. Continuare?
+Done. You can remove the USB stick.	Fatto. Puoi togliere la chiavetta.
+Plug in a USB stick	Inserisci una chiavetta USB
+exFAT — works everywhere, big files	exFAT — funziona ovunque, file grandi
+FAT32 — old devices, TVs, cars	FAT32 — vecchi dispositivi, TV, auto
+ext4 — Linux only	ext4 — solo Linux
+Preparing the USB stick	Preparo la chiavetta
+Writing	Scrivo
+Finishing (do not remove the stick)	Finisco (non togliere la chiavetta)
+Formatting	Formatto
+Installing	Installo
+Web Apps	Web App
+New web app	Nuova web app
+It appears in the menu; drag it to the dock	Compare nel menu; trascinala nel dock
+Your web apps	Le tue web app
+Ideas	Idee
+Write a name and an address.	Scrivi un nome e un indirizzo.
+Creating {}…	Creo {}…
+{} is ready in the menu.	{} è pronta nel menu.
+Tool sets	Set di strumenti
+Information gathering	Raccolta informazioni
+Find hosts, ports and services	Trova host, porte e servizi
+Web apps	Applicazioni web
+Test websites for common holes	Testa i siti per le falle comuni
+Wi-Fi auditing (needs a monitor-mode adapter)	Audit Wi-Fi (serve un adattatore in modalità monitor)
+Passwords	Password
+Crack hashes and test logins	Cracca hash e testa i login
+Sniffing and spoofing	Sniffing e spoofing
+Watch and change network traffic	Osserva e modifica il traffico di rete
+Frameworks and the exploit database	Framework e database di exploit
+Take programs apart	Smonta i programmi
+Forensics	Informatica forense
+Recover files and analyse disks and memory	Recupera file e analizza dischi e memoria
+{} of {} installed	{} di {} installati
+All installed	Tutto installato
+Everything from BlackArch	Tutto da BlackArch
+{} tools	{} strumenti
+Install all	Installa tutti
+BlackArch is on	BlackArch è attivo
+More than 2800 tools, same as Kali and more	Più di 2800 strumenti, come Kali e di più
+Add BlackArch	Aggiungi BlackArch
+More than 2800 security tools, same as Kali and more	Più di 2800 strumenti di sicurezza, come Kali e di più
+Downloading the BlackArch setup	Scarico l'installazione di BlackArch
+Adding the BlackArch repository and its keys	Aggiungo il repository BlackArch e le sue chiavi
+Anonymous mode	Modalità anonima
+Random MAC address and Tor together, in one click	MAC casuale e Tor insieme, con un clic
+Browser through Tor	Browser tramite Tor
+Firefox with a private profile, all traffic over Tor	Firefox con un profilo privato, tutto il traffico via Tor
+New random MAC address	Nuovo indirizzo MAC casuale
+Real MAC address back	Ripristino il MAC reale
+Installing Tor	Installo Tor
+Starting Tor	Avvio Tor
+Stopping Tor	Fermo Tor

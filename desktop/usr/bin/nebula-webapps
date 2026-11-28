@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""NebulaOS Web Apps: turn any website into an app — its own window, icon in the menu and dock.
+
+Uses Chromium-family browsers in app mode when installed, otherwise a separate Firefox profile with
+the toolbars hidden. Each web app keeps its own logins and cookies.
+"""
+import re
+import shutil
+import subprocess
+import sys
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/nebulaos")
+from nebula_qt import _, Page, QIcon, Qt, app, background, fit  # noqa: E402
+from PySide6.QtGui import QPixmap  # noqa: E402
+from PySide6.QtWidgets import QLineEdit, QMainWindow, QMessageBox, QPushButton  # noqa: E402
+
+HOME = Path.home()
+APPS = HOME / ".local/share/applications"
+ICONS = HOME / ".local/share/icons/nebula-webapps"
+PROFILES = HOME / ".local/share/nebula-webapps"
+PREFIX = "nebula-webapp-"
+UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) NebulaOS-WebApps"}
+
+SUGGESTED = [("YouTube", "https://www.youtube.com"), ("WhatsApp", "https://web.whatsapp.com"),
+             ("ChatGPT", "https://chatgpt.com"), ("Gmail", "https://mail.google.com"),
+             ("Netflix", "https://www.netflix.com"), ("Instagram", "https://www.instagram.com"),
+             ("Notion", "https://www.notion.so"), ("Figma", "https://www.figma.com"),
+             ("Twitch", "https://www.twitch.tv"), ("Google Drive", "https://drive.google.com")]
+
+
+def slug(name):
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "app"
+
+
+def browser():
+    """(kind, command) — Chromium-family app mode is best; Firefox works everywhere."""
+    for b in ("chromium", "google-chrome-stable", "brave", "vivaldi-stable", "microsoft-edge-stable"):
+        if shutil.which(b):
+            return "chromium", [b]
+    for fid in ("org.chromium.Chromium", "com.google.Chrome", "com.brave.Browser") if shutil.which("flatpak") else ():
+        if subprocess.run(["flatpak", "info", fid], capture_output=True).returncode == 0:
+            return "chromium", ["flatpak", "run", fid]
+    return "firefox", ["firefox"]
+
+
+def fetch_icon(url, dest):
+    """Best icon the site offers: apple-touch-icon / large icon link, else /favicon.ico."""
+    base = "{0.scheme}://{0.netloc}".format(urllib.parse.urlparse(url))
+    candidates = []
+    try:
+        html = urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=8).read(300000)
+        html = html.decode("utf-8", errors="ignore")
+        for tag in re.findall(r"<link[^>]+>", html, re.I):
+            if re.search(r'rel=["\'][^"\']*(apple-touch-icon|icon)', tag, re.I):
+                m = re.search(r'href=["\']([^"\']+)', tag, re.I)
+                if m:
+                    size = re.search(r'sizes=["\'](\d+)', tag)
+                    candidates.append((int(size.group(1)) if size else (180 if "apple" in tag.lower() else 32),
+                                       urllib.parse.urljoin(url, m.group(1))))
+    except (OSError, ValueError):
+        pass
+    candidates.sort(reverse=True)
+    for _size, icon_url in candidates + [(0, base + "/favicon.ico")]:
+        try:
+            data = urllib.request.urlopen(urllib.request.Request(icon_url, headers=UA), timeout=8).read(2_000_000)
+        except (OSError, ValueError):
+            continue
+        pix = QPixmap()
+        if pix.loadFromData(data) and not pix.isNull():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            pix.scaled(256, 256, Qt.KeepAspectRatio, Qt.SmoothTransformation).save(str(dest), "PNG")
+            return True
+    return False
+
+
+def firefox_profile(path):
+    """Separate Firefox profile with tabs and address bar hidden — looks like an app window."""
+    (path / "chrome").mkdir(parents=True, exist_ok=True)
+    (path / "user.js").write_text(
+        'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);\n'
+        'user_pref("browser.shell.checkDefaultBrowser", false);\n'
+        'user_pref("browser.tabs.warnOnClose", false);\n'
+        'user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);\n'
+        'user_pref("browser.aboutwelcome.enabled", false);\n', encoding="utf-8")
+    (path / "chrome/userChrome.css").write_text(
+        "#TabsToolbar, #nav-bar, #PersonalToolbar, #sidebar-box { visibility: collapse !important; }\n",
+        encoding="utf-8")
+
+
+def create(name, url):
+    sid = slug(name)
+    if not re.match(r"^https?://", url):
+        url = "https://" + url
+    icon = ICONS / f"{sid}.png"
+    has_icon = fetch_icon(url, icon)
+    kind, cmd = browser()
+    profile = PROFILES / sid
+    wmclass = f"WebApp-{sid}"
+    if kind == "chromium":
+        exec_line = cmd + [f"--app={url}", f"--class={wmclass}", f"--user-data-dir={profile}"]
+    else:
+        firefox_profile(profile)
+        exec_line = cmd + ["--name", wmclass, "--class", wmclass, "--no-remote", "--profile", str(profile), url]
+    APPS.mkdir(parents=True, exist_ok=True)
+    quoted = " ".join(f'"{a}"' if " " in a else a for a in exec_line)
+    (APPS / f"{PREFIX}{sid}.desktop").write_text(
+        "[Desktop Entry]\nType=Application\n"
+        f"Name={name}\nComment={url}\nExec={quoted}\n"
+        f"Icon={icon if has_icon else 'internet-web-browser'}\n"
+        f"StartupWMClass={wmclass}\nCategories=Network;WebApps;\nX-NebulaOS-WebApp=1\n", encoding="utf-8")
+    if shutil.which("update-desktop-database"):
+        subprocess.run(["update-desktop-database", str(APPS)], capture_output=True)
+    return sid
+
+
+def installed():
+    out = []
+    for f in sorted(APPS.glob(f"{PREFIX}*.desktop")):
+        info = dict(line.split("=", 1) for line in f.read_text(encoding="utf-8").splitlines() if "=" in line)
+        out.append((f, info.get("Name", f.stem), info.get("Comment", ""), info.get("Icon", "")))
+    return out
+
+
+class WebApps(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(_("Web Apps"))
+        self.build()
+
+    def build(self):
+        p = Page("Web Apps")
+        new = p.group("New web app")
+        lay = new.row("Name", "")
+        self.name = QLineEdit()
+        self.name.setPlaceholderText("YouTube")
+        self.name.setMinimumWidth(320)
+        lay.addWidget(self.name)
+        lay = new.row("Address", "")
+        self.url = QLineEdit()
+        self.url.setPlaceholderText("https://www.youtube.com")
+        self.url.setMinimumWidth(320)
+        lay.addWidget(self.url)
+        self.create_btn = new.action("Create", _("It appears in the menu; drag it to the dock"), "Create",
+                                     self.on_create, primary=True)
+        mine = installed()
+        if mine:
+            g = p.group("Your web apps")
+            for f, name, url, icon in mine:
+                ic = QIcon(icon) if icon.startswith("/") else QIcon.fromTheme(icon)
+                lay = g.row(name, url, ic)
+                for text, cb in (("Open", lambda f=f: subprocess.Popen(["kioclient", "exec", str(f)])),
+                                 ("Remove", lambda f=f, n=name: self.remove(f, n))):
+                    b = QPushButton(_(text))
+                    b.clicked.connect(lambda _c=False, c=cb: c())
+                    lay.addWidget(b)
+        have = {name.lower() for _f, name, _u, _i in mine}
+        ideas = [(n, u) for n, u in SUGGESTED if n.lower() not in have]
+        if ideas:
+            g = p.group("Ideas")
+            for n, u in ideas:
+                lay = g.row(n, u)
+                b = QPushButton(_("Add"))
+                b.clicked.connect(lambda _c=False, n=n, u=u: self.make(n, u))
+                lay.addWidget(b)
+        self.setCentralWidget(p)
+
+    def on_create(self):
+        name, url = self.name.text().strip(), self.url.text().strip()
+        if not name or not url:
+            QMessageBox.information(self, _("Web Apps"), _("Write a name and an address."))
+            return
+        self.make(name, url)
+
+    def make(self, name, url):
+        self.setEnabled(False)
+        self.statusBar().showMessage(_("Creating {}…").format(name))
+
+        def done(result):
+            self.setEnabled(True)
+            self.statusBar().showMessage(_("{} is ready in the menu.").format(name) if isinstance(result, str)
+                                         else str(result), 6000)
+            self.build()
+        background(lambda: create(name, url), done)
+
+    def remove(self, f, name):
+        if QMessageBox.question(self, _("Web Apps"), _("Remove {}?").format(name)) != QMessageBox.Yes:
+            return
+        sid = f.stem[len(PREFIX):]
+        f.unlink(missing_ok=True)
+        (ICONS / f"{sid}.png").unlink(missing_ok=True)
+        shutil.rmtree(PROFILES / sid, ignore_errors=True)
+        self.build()
+
+
+def main():
+    a = app("nebula-webapps", "internet-web-browser")
+    w = WebApps()
+    fit(w, 760, 640)
+    w.show()
+    return a.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

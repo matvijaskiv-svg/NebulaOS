@@ -6,12 +6,13 @@ random MAC, practice labs and the classic tools. For your own devices and labs o
 import ipaddress
 import re
 import shutil
+from pathlib import Path
 import socket
 import subprocess
 import sys
 
 sys.path.insert(0, "/usr/lib/nebulaos")
-from nebula_qt import _, Page, app, background, fit, in_terminal, run, tile  # noqa: E402
+from nebula_qt import helper, _, Page, app, background, fit, in_terminal, run, tile  # noqa: E402
 from PySide6.QtCore import QSize, Qt  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
@@ -162,6 +163,45 @@ def fill(t, rows):
             t.setItem(r, c, QTableWidgetItem(str(val)))
 
 
+TOOL_SETS = [  # (title, what it is for, Arch packages, BlackArch group)
+    ("Information gathering", "Find hosts, ports and services", ["nmap", "masscan", "whois", "bind"], "blackarch-recon"),
+    ("Web apps", "Test websites for common holes", ["sqlmap", "nikto", "gobuster", "wpscan", "zaproxy", "mitmproxy"],
+     "blackarch-webapp"),
+    ("Wireless", "Wi-Fi auditing (needs a monitor-mode adapter)",
+     ["aircrack-ng", "kismet", "reaver", "hcxtools", "hcxdumptool", "wifite", "bettercap"], "blackarch-wireless"),
+    ("Passwords", "Crack hashes and test logins", ["john", "hashcat", "hydra", "medusa"], "blackarch-cracker"),
+    ("Sniffing and spoofing", "Watch and change network traffic", ["wireshark-qt", "tcpdump", "ettercap", "bettercap"],
+     "blackarch-sniffer"),
+    ("Exploitation", "Frameworks and the exploit database", ["metasploit", "exploitdb", "impacket"],
+     "blackarch-exploitation"),
+    ("Reverse engineering", "Take programs apart", ["ghidra", "radare2", "rizin", "rz-cutter", "gdb"],
+     "blackarch-reversing"),
+    ("Forensics", "Recover files and analyse disks and memory",
+     ["sleuthkit", "testdisk", "foremost", "binwalk", "volatility3"], "blackarch-forensic"),
+]
+
+
+def installed_pkgs():
+    try:
+        return set(subprocess.run(["pacman", "-Qq"], capture_output=True, text=True, timeout=20).stdout.split())
+    except (OSError, subprocess.TimeoutExpired):
+        return set()
+
+
+def blackarch_on():
+    try:
+        return "[blackarch]" in Path("/etc/pacman.conf").read_text()
+    except OSError:
+        return False
+
+
+def group_size(group):
+    try:
+        return len(subprocess.run(["pacman", "-Sgq", group], capture_output=True, text=True, timeout=20).stdout.split())
+    except (OSError, subprocess.TimeoutExpired):
+        return 0
+
+
 class Toolkit(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -174,6 +214,7 @@ class Toolkit(QMainWindow):
         for title, icon, color, page in (("Network devices", "network-workgroup", "#0a84ff", self.page_devices),
                                          ("Port check", "network-server", "#ff9f0a", self.page_ports),
                                          ("Wi-Fi around", "network-wireless", "#30d158", self.page_wifi),
+                                         ("Tool sets", "applications-system", "#5b6b7f", self.page_sets),
                                          ("Privacy", "security-high", "#5b6b7f", self.page_privacy),
                                          ("Labs", "applications-science", "#bf5af2", self.page_labs),
                                          ("Lessons", "accessories-dictionary", "#ff375f", self.page_lessons),
@@ -269,19 +310,80 @@ class Toolkit(QMainWindow):
 
     def page_privacy(self):
         p = Page("Privacy")
+        tor = subprocess.run(["systemctl", "is-active", "--quiet", "tor"]).returncode == 0
+        mac = Path("/etc/NetworkManager/conf.d/90-nebula-mac.conf").exists()
         g = p.group()
-        st = run("tor", "status")[1].lower()
-        g.switch("Tor", "Anonymous connection on 127.0.0.1:9050; run an app through it with torsocks",
-                 "on" in st and "off" not in st, lambda on: in_terminal("nebula", "tor", "on" if on else "off"))
-        g.switch("Random MAC address", "A new hardware address for Wi-Fi and Ethernet", False,
-                 lambda on: in_terminal("nebula", "privacy", "mac", "on" if on else "off"))
+        g.switch("Anonymous mode", "Random MAC address and Tor together, in one click", tor and mac,
+                 lambda on: self.priv("anon", on))
+        g.switch("Tor", "Anonymous connection on 127.0.0.1:9050; run an app through it with torsocks", tor,
+                 lambda on: self.priv("tor", on))
+        g.switch("Random MAC address", "A new hardware address for Wi-Fi and Ethernet", mac,
+                 lambda on: self.priv("mac", on))
+        if tor and shutil.which("torsocks"):
+            g.action("Browser through Tor", "Firefox with a private profile, all traffic over Tor", "Open",
+                     lambda: subprocess.Popen(["torsocks", "firefox", "--private-window", "--no-remote",
+                                               "--profile", str(self.tor_profile()), "https://check.torproject.org"]))
         pub = p.group("Public address")
         lbl = QLabel("…")
         pub.widget(lbl)
-        background(lambda: subprocess.run(["curl", "-s", "--max-time", "6", "https://ifconfig.me"],
-                                          capture_output=True, text=True).stdout.strip(),
-                   lambda ip: lbl.setText(ip if isinstance(ip, str) and ip else "—"))
+        cmd = (["torsocks"] if tor and shutil.which("torsocks") else []) + \
+            ["curl", "-s", "--max-time", "10", "https://ifconfig.me"]
+        background(lambda: subprocess.run(cmd, capture_output=True, text=True).stdout.strip(),
+                   lambda ip: lbl.setText((ip + ("   ·   Tor" if tor else "")) if isinstance(ip, str) and ip else "—"))
         return p
+
+    def tor_profile(self):
+        prof = Path.home() / ".local/share/nebulaos/tor-firefox"
+        prof.mkdir(parents=True, exist_ok=True)
+        (prof / "user.js").write_text('user_pref("network.proxy.type", 1);\n'
+                                      'user_pref("network.proxy.socks", "127.0.0.1");\n'
+                                      'user_pref("network.proxy.socks_port", 9050);\n'
+                                      'user_pref("network.proxy.socks_remote_dns", true);\n'
+                                      'user_pref("media.peerconnection.enabled", false);\n', encoding="utf-8")
+        return prof
+
+    def priv(self, what, on):
+        helper(self, _("Privacy"), what, "on" if on else "off")
+        self.refresh()
+
+    def page_sets(self):
+        p = Page("Tool sets")
+        have = installed_pkgs()
+        ba = blackarch_on()
+        for title, desc, pkgs, group in TOOL_SETS:
+            missing = [x for x in pkgs if x not in have]
+            g = p.group(title)
+            sub = f"{_(desc)}  ·  {', '.join(pkgs)}"
+            if missing:
+                g.action(_("{} of {} installed").format(len(pkgs) - len(missing), len(pkgs)), sub, "Install",
+                         lambda m=missing, t=title: self.install(t, m), primary=True)
+            else:
+                g.row(_("All installed"), sub)
+            if ba:
+                n = group_size(group)
+                if n:
+                    g.action(_("Everything from BlackArch"), _("{} tools").format(n), "Install all",
+                             lambda gr=group, t=title: self.install(t, [gr]))
+        extra = p.group("BlackArch")
+        if ba:
+            extra.row(_("BlackArch is on"), _("More than 2800 tools, same as Kali and more"))
+        else:
+            extra.action(_("Add BlackArch"), _("More than 2800 security tools, same as Kali and more"), "Add",
+                         self.enable_blackarch, primary=True)
+        return p
+
+    def install(self, title, pkgs):
+        helper(self, _(title), "install", *pkgs)
+        self.refresh()
+
+    def enable_blackarch(self):
+        if helper(self, "BlackArch", "blackarch-enable"):
+            self.refresh()
+
+    def refresh(self):
+        row = self.nav.currentRow()
+        self.nav.setCurrentRow(-1)
+        self.nav.setCurrentRow(row)
 
     def page_labs(self):
         p = Page("Labs", "Practice targets that run in Docker and are reachable only from this computer.")
@@ -348,7 +450,7 @@ class Toolkit(QMainWindow):
                 action = (lambda c=cmd: in_terminal(*c[1:])) if cmd[0] == "term" else (lambda c=cmd: subprocess.Popen(c))
                 g.action(name, desc, "Open", action)
             else:
-                g.action(name, desc, "Install", lambda pk=pkg: in_terminal("sudo", "pacman", "-S", "--needed", pk))
+                g.action(name, desc, "Install", lambda pk=pkg, n=name: self.install(n, [pk]))
         return p
 
 

@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (  # noqa: E402
     QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
-__all__ = ["Meter", "Thumb", "Toggle", "tile", "_", "app", "fit", "run", "run_cmd", "in_terminal", "background", "Page", "Group", "QIcon", "Qt"]
+__all__ = ["helper", "task", "Meter", "Thumb", "Toggle", "tile", "_", "app", "fit", "run", "run_cmd", "in_terminal", "background", "Page", "Group", "QIcon", "Qt"]
 
 
 def app(desktop_id, icon="nebulaos"):
@@ -73,7 +73,9 @@ QScrollBar::handle:vertical {{ background: palette(midlight); border-radius: 3px
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
 QStatusBar {{ border: none; }}
 QScrollArea {{ background: transparent; }}
+QPushButton {{ min-width: 64px; }}
 QPushButton:disabled {{ color: palette(placeholder-text); }}
+QPushButton:default:disabled {{ background: palette(midlight); color: palette(placeholder-text); font-weight: normal; }}
 QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus {{ border: 1px solid palette(highlight); }}
 QProgressBar::chunk {{ background: palette(highlight); }}
 """
@@ -469,3 +471,82 @@ class Page(QScrollArea):
 def expanding(w):
     w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
     return w
+
+
+SYSTEM_HELPER = "/usr/lib/nebulaos/system-helper"
+
+
+def task(parent, title, cmd, intro=None):
+    """Run a root helper through pkexec in a progress window (STEP: text, PROGRESS: n). Returns True on success."""
+    from PySide6.QtCore import QProcess
+    from PySide6.QtWidgets import QDialog, QPlainTextEdit, QProgressBar
+    dlg = QDialog(parent)
+    dlg.setWindowTitle(title)
+    dlg.setMinimumWidth(500)
+    v = QVBoxLayout(dlg)
+    label = QLabel(intro or _("The system asks for your password once."))
+    f = label.font()
+    f.setBold(True)
+    label.setFont(f)
+    label.setWordWrap(True)
+    v.addWidget(label)
+    bar = QProgressBar()
+    bar.setRange(0, 0)
+    bar.setTextVisible(False)
+    v.addWidget(bar)
+    log = QPlainTextEdit()
+    log.setReadOnly(True)
+    log.setMaximumBlockCount(500)
+    log.setFixedHeight(150)
+    log.setFont(QFont("monospace", 8))
+    log.hide()
+    row = QHBoxLayout()
+    details = QPushButton(_("Details"))
+    details.setFlat(True)
+    details.clicked.connect(lambda: log.setVisible(not log.isVisible()))
+    close = QPushButton(_("Close"))
+    close.setEnabled(False)
+    close.clicked.connect(dlg.accept)
+    row.addWidget(details)
+    row.addStretch(1)
+    row.addWidget(close)
+    v.addWidget(log)
+    v.addLayout(row)
+    proc = QProcess(dlg)
+    proc.setProcessChannelMode(QProcess.MergedChannels)
+    state = {"ok": False}
+
+    def read():
+        for line in bytes(proc.readAllStandardOutput()).decode(errors="replace").splitlines():
+            if line.startswith("STEP: "):
+                label.setText(_(line[6:]))
+            elif line.startswith("PROGRESS: "):
+                try:
+                    bar.setRange(0, 100)
+                    bar.setValue(int(line[10:]))
+                except ValueError:
+                    pass
+            elif line.strip():
+                log.appendPlainText(line)
+
+    def done(code, _st):
+        state["ok"] = code == 0
+        bar.setRange(0, 100)
+        bar.setValue(100 if code == 0 else 0)
+        label.setText(_("Done.") if code == 0 else _("Something went wrong — see the log."))
+        if code != 0:
+            log.show()
+        close.setEnabled(True)
+        close.setDefault(True)
+
+    proc.readyReadStandardOutput.connect(read)
+    proc.finished.connect(done)
+    dlg.reject = lambda: proc.state() == QProcess.NotRunning and QDialog.reject(dlg)
+    proc.start(cmd[0], cmd[1:])
+    dlg.exec()
+    return state["ok"]
+
+
+def helper(parent, title, *args, intro=None):
+    """system-helper <args> as root, with the progress window."""
+    return task(parent, title, ["pkexec", SYSTEM_HELPER, *args], intro)

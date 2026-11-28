@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=USB Stick
+Name[ru]=USB-флешка
+Name[uk]=USB-флешка
+Name[it]=Chiavetta USB
+Comment=Write an ISO to a USB stick or format it
+Comment[ru]=Записать ISO на флешку или отформатировать её
+Comment[uk]=Записати ISO на флешку або відформатувати її
+Comment[it]=Scrivi una ISO su una chiavetta o formattala
+Icon=drive-removable-media-usb
+Exec=nebula-usb
+Categories=System;Utility;
+Keywords=usb;iso;flash;format;stick;

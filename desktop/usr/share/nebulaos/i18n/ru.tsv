@@ -1064,3 +1064,70 @@ Music making	Создание музыки
 Photography	Фотография
 3D printing	3D-печать
 Emulators	Эмуляторы
+USB Stick	USB-флешка
+USB stick	USB-флешка
+Write an image	Записать образ
+Format	Форматировать
+Image	Образ
+An .iso or .img file, for example NebulaOS	Файл .iso или .img, например NebulaOS
+Checksum (SHA-256)	Контрольная сумма (SHA-256)
+Write	Записать
+Everything on the stick will be erased.	Всё на флешке будет стёрто.
+Choose an image	Выберите образ
+Disk images	Образы дисков
+Everything on {} will be erased. Continue?	Всё на {} будет стёрто. Продолжить?
+Done. You can remove the USB stick.	Готово. Флешку можно вынуть.
+Plug in a USB stick	Вставьте USB-флешку
+File system	Файловая система
+exFAT — works everywhere, big files	exFAT — работает везде, большие файлы
+FAT32 — old devices, TVs, cars	FAT32 — старые устройства, телевизоры, машины
+ext4 — Linux only	ext4 — только Linux
+Preparing the USB stick	Готовлю флешку
+Writing	Записываю
+Finishing (do not remove the stick)	Завершаю (не вынимайте флешку)
+Formatting	Форматирую
+Installing	Устанавливаю
+Web Apps	Веб-приложения
+New web app	Новое веб-приложение
+It appears in the menu; drag it to the dock	Появится в меню; перетащите в док
+Your web apps	Ваши веб-приложения
+Ideas	Идеи
+Write a name and an address.	Напишите имя и адрес.
+Creating {}…	Создаю {}…
+{} is ready in the menu.	{} готово, ищите в меню.
+Tool sets	Наборы инструментов
+Information gathering	Сбор информации
+Find hosts, ports and services	Поиск хостов, портов и служб
+Web apps	Веб-приложения
+Test websites for common holes	Проверка сайтов на типичные дыры
+Wireless	Беспроводные сети
+Wi-Fi auditing (needs a monitor-mode adapter)	Аудит Wi-Fi (нужен адаптер с режимом монитора)
+Passwords	Пароли
+Crack hashes and test logins	Взлом хешей и проверка входов
+Sniffing and spoofing	Перехват и подмена
+Watch and change network traffic	Смотреть и менять сетевой трафик
+Exploitation	Эксплуатация
+Frameworks and the exploit database	Фреймворки и база эксплойтов
+Take programs apart	Разбор программ
+Forensics	Форензика
+Recover files and analyse disks and memory	Восстановление файлов, анализ дисков и памяти
+{} of {} installed	Установлено {} из {}
+All installed	Всё установлено
+Everything from BlackArch	Всё из BlackArch
+{} tools	{} инструментов
+Install all	Установить все
+BlackArch is on	BlackArch подключён
+More than 2800 tools, same as Kali and more	Более 2800 инструментов — как в Kali и больше
+Add BlackArch	Подключить BlackArch
+More than 2800 security tools, same as Kali and more	Более 2800 инструментов безопасности — как в Kali и больше
+Downloading the BlackArch setup	Скачиваю установщик BlackArch
+Adding the BlackArch repository and its keys	Подключаю репозиторий BlackArch и его ключи
+Anonymous mode	Анонимный режим
+Random MAC address and Tor together, in one click	Случайный MAC и Tor вместе, одной кнопкой
+Browser through Tor	Браузер через Tor
+Firefox with a private profile, all traffic over Tor	Firefox с отдельным профилем, весь трафик через Tor
+New random MAC address	Новый случайный MAC-адрес
+Real MAC address back	Возвращаю настоящий MAC-адрес
+Installing Tor	Устанавливаю Tor
+Starting Tor	Запускаю Tor
+Stopping Tor	Останавливаю Tor

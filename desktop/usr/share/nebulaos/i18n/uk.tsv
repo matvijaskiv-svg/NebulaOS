@@ -215,7 +215,7 @@ Language and region	Мова й регіон
 About this system	Про цю систему
 Version {}	Версія {}
 This computer	Цей комп'ютер
-Name	Ім'я
+Name	Назва
 Processor	Процесор
 Graphics	Відеокарта
 Memory and storage	Пам'ять і сховище
@@ -1001,3 +1001,70 @@ Music making	Створення музики
 Photography	Фотографія
 3D printing	3D-друк
 Emulators	Емулятори
+USB Stick	USB-флешка
+USB stick	USB-флешка
+Write an image	Записати образ
+Format	Форматувати
+Image	Образ
+An .iso or .img file, for example NebulaOS	Файл .iso або .img, наприклад NebulaOS
+Checksum (SHA-256)	Контрольна сума (SHA-256)
+Write	Записати
+Everything on the stick will be erased.	Усе на флешці буде стерто.
+Choose an image	Виберіть образ
+Disk images	Образи дисків
+Everything on {} will be erased. Continue?	Усе на {} буде стерто. Продовжити?
+Done. You can remove the USB stick.	Готово. Флешку можна вийняти.
+Plug in a USB stick	Вставте USB-флешку
+File system	Файлова система
+exFAT — works everywhere, big files	exFAT — працює всюди, великі файли
+FAT32 — old devices, TVs, cars	FAT32 — старі пристрої, телевізори, авто
+ext4 — Linux only	ext4 — лише Linux
+Preparing the USB stick	Готую флешку
+Writing	Записую
+Finishing (do not remove the stick)	Завершую (не виймайте флешку)
+Formatting	Форматую
+Installing	Встановлюю
+Web Apps	Веб-застосунки
+New web app	Новий веб-застосунок
+It appears in the menu; drag it to the dock	З'явиться в меню; перетягніть у док
+Your web apps	Ваші веб-застосунки
+Ideas	Ідеї
+Write a name and an address.	Напишіть назву й адресу.
+Creating {}…	Створюю {}…
+{} is ready in the menu.	{} готово, шукайте в меню.
+Tool sets	Набори інструментів
+Information gathering	Збір інформації
+Find hosts, ports and services	Пошук хостів, портів і служб
+Web apps	Веб-застосунки
+Test websites for common holes	Перевірка сайтів на типові діри
+Wireless	Бездротові мережі
+Wi-Fi auditing (needs a monitor-mode adapter)	Аудит Wi-Fi (потрібен адаптер з режимом монітора)
+Passwords	Паролі
+Crack hashes and test logins	Злам хешів і перевірка входів
+Sniffing and spoofing	Перехоплення й підміна
+Watch and change network traffic	Дивитися й змінювати мережевий трафік
+Exploitation	Експлуатація
+Frameworks and the exploit database	Фреймворки й база експлойтів
+Take programs apart	Розбір програм
+Forensics	Форензика
+Recover files and analyse disks and memory	Відновлення файлів, аналіз дисків і пам'яті
+{} of {} installed	Встановлено {} з {}
+All installed	Усе встановлено
+Everything from BlackArch	Усе з BlackArch
+{} tools	{} інструментів
+Install all	Встановити всі
+BlackArch is on	BlackArch підключено
+More than 2800 tools, same as Kali and more	Понад 2800 інструментів — як у Kali і більше
+Add BlackArch	Підключити BlackArch
+More than 2800 security tools, same as Kali and more	Понад 2800 інструментів безпеки — як у Kali і більше
+Downloading the BlackArch setup	Завантажую інсталятор BlackArch
+Adding the BlackArch repository and its keys	Підключаю репозиторій BlackArch і його ключі
+Anonymous mode	Анонімний режим
+Random MAC address and Tor together, in one click	Випадковий MAC і Tor разом, однією кнопкою
+Browser through Tor	Браузер через Tor
+Firefox with a private profile, all traffic over Tor	Firefox з окремим профілем, увесь трафік через Tor
+New random MAC address	Нова випадкова MAC-адреса
+Real MAC address back	Повертаю справжню MAC-адресу
+Installing Tor	Встановлюю Tor
+Starting Tor	Запускаю Tor
+Stopping Tor	Зупиняю Tor

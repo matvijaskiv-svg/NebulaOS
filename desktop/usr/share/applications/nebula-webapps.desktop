@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Web Apps
+Name[ru]=Веб-приложения
+Name[uk]=Веб-застосунки
+Name[it]=Web App
+Comment=Turn any website into an app
+Comment[ru]=Любой сайт как отдельное приложение
+Comment[uk]=Будь-який сайт як окремий застосунок
+Comment[it]=Trasforma qualsiasi sito in un'app
+Icon=internet-web-browser
+Exec=nebula-webapps
+Categories=Network;Utility;
+Keywords=web;app;site;pwa;
