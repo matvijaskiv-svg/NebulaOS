@@ -1491,6 +1491,13 @@ T = {
     "Developer": ("Разработка", "Розробка", "Sviluppo"),
     "Privacy": ("Приватность", "Приватність", "Privacy"),
     "Get all ({})": ("Установить все ({})", "Встановити всі ({})", "Installa tutte ({})"),
+    "3D and game making": ("3D и создание игр", "3D і створення ігор", "3D e creazione di giochi"),
+    "Drawing and design": ("Рисование и дизайн", "Малювання й дизайн", "Disegno e design"),
+    "Video editing": ("Монтаж видео", "Монтаж відео", "Montaggio video"),
+    "Music making": ("Создание музыки", "Створення музики", "Fare musica"),
+    "Photography": ("Фотография", "Фотографія", "Fotografia"),
+    "3D printing": ("3D-печать", "3D-друк", "Stampa 3D"),
+    "Emulators": ("Эмуляторы", "Емулятори", "Emulatori"),
 }
 
 OUT = Path(__file__).resolve().parent.parent / "desktop/usr/share/nebulaos/i18n"
