@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install NebulaOS
+Name[it]=Installa NebulaOS
+Name[ru]=Установить NebulaOS
+Name[uk]=Встановити NebulaOS
+Comment=NebulaOS on top of Garuda / Arch: your apps and files stay
+Comment[it]=NebulaOS sopra Garuda / Arch: app e file restano
+Comment[ru]=NebulaOS поверх Garuda / Arch: программы и файлы остаются
+Icon=system-software-install
+Terminal=false
+Exec=bash -c 'f=$(mktemp /tmp/nebulaos-install.XXXX.sh) && curl -fsSL https://raw.githubusercontent.com/matvijaskiv-svg/NebulaOS-updates/main/install.sh -o "$f" && bash "$f" --gui || kdialog --error "NebulaOS: no internet?"'
